@@ -160,6 +160,12 @@ class Hardware:
             pwm_mode=_read_int(os.path.join(hp, "pwm1_enable")) if hp else None,
         )
 
+    def read_pwm(self) -> int | None:
+        """Current fan speed as pwm (0-255). The patched driver derives it from
+        the measured RPM, so in AUTO it reports what the firmware is doing."""
+        hp = self.hp_hwmon()
+        return _read_int(os.path.join(hp, "pwm1")) if hp else None
+
     # -- writers --
 
     def _write(self, leaf: str, value: int) -> None:

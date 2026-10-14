@@ -63,14 +63,20 @@ energia no GNOME e jogue um pouco. Depois:
 ```bash
 sudo ./install.sh driver-install  # permanente (DKMS, recompila sozinho no 7.0.x)
 sudo ./install.sh daemon          # serviço de curva de ventoinha
+sudo ./install.sh extension       # extensão da barra do GNOME, para você
 ```
 
 Ou tudo de uma vez, parando onde precisar reiniciar: `sudo ./install.sh all`.
+Rodar o `all` de novo é seguro e é também a forma de **atualizar**: ele pula o
+que já está instalado, atualiza o serviço e a extensão, e só substitui o
+`config.toml` se você não o editou.
 
 ## Uso
 
-O **perfil** é escolhido no menu de energia do GNOME (canto superior direito)
-ou com o `victusctl`. Cada perfil tem a sua curva de ventoinha:
+O **perfil** é o próprio **modo de energia do GNOME** (Economia, Equilibrado,
+Desempenho, no menu do canto superior direito). Com o driver corrigido, ele
+ativa o modo térmico real da HP, como o OMEN fazia, e o serviço troca a curva
+de ventoinha junto. Também dá para usar a extensão ou o `victusctl`:
 
 ```bash
 victusctl status                 # temperaturas, RPM, decisão atual
@@ -83,12 +89,10 @@ térmico de desempenho da HP, o cTGP da GPU e a curva mais agressiva.
 
 ### Extensão do GNOME
 
-Rode **sem sudo** e depois saia e entre de novo na sessão (no Wayland o GNOME
-só encontra extensões novas no login):
-
-```bash
-./gnome-extension/install.sh               # remover: --uninstall
-```
+Instalada pelo `sudo ./install.sh all` (ou `extension`). Depois **saia e
+entre de novo na sessão** uma vez: no Wayland o GNOME só carrega extensões
+novas ou atualizadas no login. Para instalar à mão, sem sudo:
+`./gnome-extension/install.sh` (remover: `--uninstall`).
 
 O ícone de ventoinha na barra mostra a temperatura do sensor mais quente:
 laranja a partir de 80 °C, vermelho a partir de 90 °C ou em emergência. O
@@ -101,8 +105,13 @@ privilégios: lê `/run/victus-thermal/status.json` e chama o `victusctl`.
 
 Edite `/etc/victus-thermal/config.toml`; a mudança vale em até 2 s. Os
 pontos são `[temperatura °C, ventoinha %]` e a entrada é o sensor mais quente
-(CPU, iGPU ou GPU NVIDIA). `0 %` deixa o firmware decidir (permite as
-ventoinhas pararem em repouso) e `100 %` usa o modo MAX. Um arquivo inválido é
+(CPU, iGPU ou GPU NVIDIA). `0 %` deixa o firmware HP decidir e `100 %` usa o
+modo MAX.
+
+As curvas padrão começam em 0 %: em carga leve **o firmware HP manda**, no
+modo térmico do perfil escolhido, e a curva só assume quando esquenta de
+verdade, onde o firmware é tímido demais. Ao assumir, o serviço **nunca
+começa mais devagar do que o firmware estava girando**. Um arquivo inválido é
 recusado por inteiro (o motivo vai para `journalctl -u victus-thermal`) e
 os padrões continuam valendo.
 
@@ -117,9 +126,10 @@ os padrões continuam valendo.
 - **Kernel fora da série 7.0:** o DKMS não compila e o driver original
   continua funcionando.
 - **Permissões:** o daemon roda como root, mas sem nenhuma *capability* e com
-  sandbox do systemd. O `victusctl` roda como usuário comum: o grupo
-  `victus-thermal` só pode gravar o pedido de modo, que é lido sem seguir
-  links simbólicos e aceito apenas se for uma palavra conhecida.
+  sandbox do systemd. O `victusctl` roda como usuário comum: só o grupo
+  `victus-thermal` e o usuário que instalou (por ACL, que vale sem precisar
+  sair da sessão) podem gravar o pedido de modo. Ele é lido sem seguir links
+  simbólicos e só é aceito se for uma palavra conhecida.
 
 ## Congelamentos: diagnóstico
 

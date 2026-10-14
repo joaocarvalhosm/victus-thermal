@@ -82,6 +82,45 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(status["decision"]["kind"], "manual")
         self.assertEqual(fs.get(f"{HP}/pwm1"), str(status["decision"]["pwm"]))
 
+    def test_takeover_never_slower_than_firmware(self):
+        fs, d = self.make(config_text="smoothing = 1.0\nhysteresis = 0\n")
+        fs.set(f"{HP}/pwm1", "150")             # firmware already spinning fast
+        fs.set("sys/class/hwmon/hwmon6/temp1_input", "61000")   # curve wants ~7 %
+        status = d.step()
+        self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "1")
+        self.assertEqual(fs.get(f"{HP}/pwm1"), "150")
+        self.assertEqual(status["decision"]["applied_pwm"], 150)
+        self.assertLess(status["decision"]["pwm"], 150)
+
+    def test_curve_above_firmware_wins(self):
+        fs, d = self.make(config_text="smoothing = 1.0\nhysteresis = 0\n")
+        fs.set(f"{HP}/pwm1", "40")
+        fs.set("sys/class/hwmon/hwmon6/temp1_input", "80000")
+        status = d.step()
+        self.assertEqual(int(fs.get(f"{HP}/pwm1")), status["decision"]["pwm"])
+        self.assertGreater(status["decision"]["pwm"], 40)
+
+    def test_floor_resets_after_returning_to_firmware(self):
+        fs, d = self.make(config_text="smoothing = 1.0\nhysteresis = 0\n")
+        fs.set(f"{HP}/pwm1", "150")
+        fs.set("sys/class/hwmon/hwmon6/temp1_input", "61000")
+        d.step()
+        fs.set("sys/class/hwmon/hwmon6/temp1_input", "50000")  # back to firmware
+        d.step()
+        self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "2")
+        fs.set(f"{HP}/pwm1", "20")                # firmware slowed down meanwhile
+        fs.set("sys/class/hwmon/hwmon6/temp1_input", "61000")
+        status = d.step()
+        self.assertEqual(status["decision"]["applied_pwm"], 20)
+
+    def test_no_floor_when_coming_down_from_max(self):
+        fs, d = self.make(config_text="smoothing = 1.0\nhysteresis = 0\n")
+        fs.set(f"{HP}/pwm1_enable", "0")
+        fs.set(f"{HP}/pwm1", "255")
+        fs.set("sys/class/hwmon/hwmon6/temp1_input", "70000")
+        status = d.step()
+        self.assertEqual(status["decision"]["applied_pwm"], status["decision"]["pwm"])
+
     def test_small_pwm_changes_are_not_written(self):
         fs, d = self.make(config_text="smoothing = 1.0\nhysteresis = 0\n")
         fs.set("sys/class/hwmon/hwmon6/temp1_input", "75000")

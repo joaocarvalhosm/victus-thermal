@@ -49,8 +49,10 @@ function describeDecision(s) {
     const d = s.decision;
     if (s.emergency)
         return 'EMERGÊNCIA: ventoinhas no máximo até esfriar';
-    if (d.kind === 'manual')
-        return `Curva: ${Math.round(d.duty)}% a ${Math.round(d.curve_temp)} °C`;
+    if (d.kind === 'manual') {
+        const text = `Curva: ${Math.round(d.duty)}% a ${Math.round(d.curve_temp)} °C`;
+        return d.applied_pwm > d.pwm ? `${text} (mantendo a velocidade do firmware)` : text;
+    }
     if (d.kind === 'max')
         return s.mode === 'max' ? 'Máximo (forçado)' : 'Curva: máximo';
     return s.mode === 'auto' ? 'Firmware HP no controle (forçado)' : 'Firmware HP no controle';
@@ -114,7 +116,9 @@ class VictusIndicator extends PanelMenu.Button {
         this._fansItem = this._infoItem();
         this._reasonItem = this._infoItem('victus-detail');
 
-        this._profileItems = this._choiceSection('Perfil', PROFILES,
+        // Same setting as GNOME's Power Mode menu (power-profiles-daemon); with
+        // the patched hp-wmi it also switches HP's own thermal mode.
+        this._profileItems = this._choiceSection('Modo de energia (o mesmo do GNOME)', PROFILES,
             key => this._run(['victusctl', 'profile', key]));
         this._modeItems = this._choiceSection('Ventoinhas', FAN_MODES,
             key => this._run(['victusctl', 'mode', key]));
@@ -125,8 +129,13 @@ class VictusIndicator extends PanelMenu.Button {
             const proc = Gio.Subprocess.new(argv,
                 Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_PIPE);
             const [, stderr] = await proc.communicate_utf8_async(null, this._cancellable);
-            if (!proc.get_successful())
+            if (!proc.get_successful()) {
+                if (stderr?.includes('permission denied')) {
+                    throw new Error('Sem permissão para mudar as ventoinhas. ' +
+                        'Rode "sudo ./install.sh daemon" de novo ou saia e entre na sessão.');
+                }
                 throw new Error(stderr?.trim() || `${argv.join(' ')} falhou`);
+            }
         } catch (e) {
             if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                 return;

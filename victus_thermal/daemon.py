@@ -23,7 +23,7 @@ import time
 
 from . import __version__, config
 from .hw import PWM_AUTO, PWM_MANUAL, PWM_MAX, Hardware
-from .policy import AUTO, MANUAL, MAX, MODES, Decision, Policy
+from .policy import AUTO, MAX, MODES, Decision, Policy
 
 # RUNTIME_DIR is root-only; CONTROL_DIR is writable by the victus-thermal
 # group and holds nothing but the mode request, which the daemon only reads.
@@ -93,6 +93,9 @@ class Daemon:
         cfg = self._load_config(force=True)
         self.policy = Policy(cfg)
         self._last_pwm: int | None = None
+        # Firmware fan speed when the curve took over from AUTO; manual pwm
+        # never drops below it while the curve stays in control.
+        self._handover_floor = 0
         self._last_error: str | None = None
         self._last_reason: str | None = None
 
@@ -115,23 +118,29 @@ class Daemon:
 
     # -- hardware application --
 
-    def apply(self, d: Decision, current_mode: int | None) -> None:
-        if d.kind == AUTO:
-            if current_mode != PWM_AUTO:
-                self.hw.set_mode(PWM_AUTO)
+    def apply(self, d: Decision, current_mode: int | None) -> int | None:
+        """Drive the hardware towards the decision. Returns the pwm written
+        (or held) in manual mode, else None."""
+        if d.kind in (AUTO, MAX):
+            target = PWM_AUTO if d.kind == AUTO else PWM_MAX
+            if current_mode != target:
+                self.hw.set_mode(target)
             self._last_pwm = None
-        elif d.kind == MAX:
-            if current_mode != PWM_MAX:
-                self.hw.set_mode(PWM_MAX)
-            self._last_pwm = None
-        elif d.kind == MANUAL:
-            switched = current_mode != PWM_MANUAL
-            if switched:
-                self.hw.set_mode(PWM_MANUAL)
-            if (switched or self._last_pwm is None
-                    or abs(d.pwm - self._last_pwm) >= PWM_WRITE_THRESHOLD):
-                self.hw.set_pwm(d.pwm)
-                self._last_pwm = d.pwm
+            self._handover_floor = 0
+            return None
+
+        switched = current_mode != PWM_MANUAL
+        if switched:
+            # Taking over from the firmware: never start slower than it runs.
+            self._handover_floor = (
+                (self.hw.read_pwm() or 0) if current_mode == PWM_AUTO else 0)
+            self.hw.set_mode(PWM_MANUAL)
+        pwm = max(d.pwm, self._handover_floor)
+        if (switched or self._last_pwm is None
+                or abs(pwm - self._last_pwm) >= PWM_WRITE_THRESHOLD):
+            self.hw.set_pwm(pwm)
+            self._last_pwm = pwm
+        return self._last_pwm
 
     # -- one iteration --
 
@@ -146,11 +155,12 @@ class Daemon:
         d = self.policy.decide(r, mode, manual)
 
         error = None
+        applied = None
         if self.hw.hp_hwmon() is None:
             error = "hp-wmi fan interface not found"
         else:
             try:
-                self.apply(d, r.pwm_mode)
+                applied = self.apply(d, r.pwm_mode)
             except (OSError, ValueError) as exc:
                 error = f"fan write failed: {exc}"
                 self._last_pwm = None
@@ -174,7 +184,8 @@ class Daemon:
             "temps": {"cpu": r.cpu, "igpu": r.igpu, "dgpu": r.dgpu, "dgpu_state": r.dgpu_state},
             "fans_rpm": list(r.rpm),
             "decision": {"kind": d.kind, "pwm": d.pwm, "duty": d.duty,
-                         "curve_temp": d.curve_temp, "reason": d.reason},
+                         "curve_temp": d.curve_temp, "reason": d.reason,
+                         "applied_pwm": applied},
             "emergency": self.policy.state.emergency,
             "error": error,
         }

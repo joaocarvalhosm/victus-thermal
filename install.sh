@@ -9,6 +9,7 @@
 #   sudo ./install.sh driver-test    build, sign and load the driver until reboot
 #   sudo ./install.sh driver-install install the driver permanently (DKMS)
 #   sudo ./install.sh daemon         install the fan control service
+#   sudo ./install.sh extension      install the GNOME top-bar extension for you
 #   sudo ./install.sh all            everything, stopping where a reboot is needed
 #
 # Each step is idempotent and can be re-run.
@@ -27,6 +28,12 @@ readonly MOK_PRIV="${MOK_DIR}/MOK.priv"
 readonly LIB_DIR="/usr/lib/victus-thermal"
 readonly ETC_DIR="/etc/victus-thermal"
 readonly GROUP="victus-thermal"
+readonly USER_TMPFILES="/etc/tmpfiles.d/victus-thermal-user.conf"
+# sha256 of every config.toml shipped before the current one. An installed
+# config matching one of these was never edited and is safe to upgrade.
+readonly PRISTINE_CONFIGS=(
+	44a76bc7ac9e7e11e03d961a30a27f75242643c311219830b9863c097ea82649  # 1.0.0
+)
 KVER="$(uname -r)"
 readonly KVER
 
@@ -272,7 +279,11 @@ cmd_daemon() {
 	getent group "${GROUP}" >/dev/null || groupadd --system "${GROUP}"
 	if [[ -n ${user} && ${user} != root ]]; then
 		usermod -aG "${GROUP}" "${user}"
-		ok "added ${user} to ${GROUP} (log out and back in to use 'victusctl mode')"
+		# Group membership only reaches new logins; an ACL for the installing
+		# user lets the running desktop session change the fan mode right away.
+		printf '# written by victus-thermal install.sh\na+ /run/victus-thermal/control - - - - u:%s:rwx\n' \
+			"${user}" > "${USER_TMPFILES}"
+		chmod 0644 "${USER_TMPFILES}"
 	fi
 
 	# Code run as root must not be writable by anyone else.
@@ -285,17 +296,33 @@ cmd_daemon() {
 	ln -sf "${LIB_DIR}/bin/victusctl" /usr/bin/victusctl
 
 	install -d -m 0755 "${ETC_DIR}"
-	if [[ -e ${ETC_DIR}/config.toml ]]; then
-		ok "keeping existing ${ETC_DIR}/config.toml"
+	local cfg="${ETC_DIR}/config.toml" current
+	if [[ -e ${cfg} ]]; then
+		current="$(sha256sum "${cfg}" | cut -d' ' -f1)"
+		if [[ " ${PRISTINE_CONFIGS[*]} " == *" ${current} "* ]]; then
+			install -m 0644 "${HERE}/packaging/config.toml" "${cfg}"
+			ok "upgraded unmodified ${cfg} to the new defaults"
+		elif ! cmp -s "${cfg}" "${HERE}/packaging/config.toml"; then
+			ok "keeping your edited ${cfg} (new defaults: ${HERE}/packaging/config.toml)"
+		fi
 	else
-		install -m 0644 "${HERE}/packaging/config.toml" "${ETC_DIR}/config.toml"
+		install -m 0644 "${HERE}/packaging/config.toml" "${cfg}"
 	fi
 
 	install -d -m 0755 /usr/share/doc/victus-thermal
 	install -m 0644 "${HERE}/README.md" /usr/share/doc/victus-thermal/
 	install -m 0644 "${HERE}/packaging/victus-thermal.tmpfiles" /usr/lib/tmpfiles.d/victus-thermal.conf
 	install -m 0644 "${HERE}/packaging/victus-thermal.service" /etc/systemd/system/
-	systemd-tmpfiles --create /usr/lib/tmpfiles.d/victus-thermal.conf
+	local tmpfiles=(/usr/lib/tmpfiles.d/victus-thermal.conf)
+	[[ -e ${USER_TMPFILES} ]] && tmpfiles+=("${USER_TMPFILES}")
+	systemd-tmpfiles --create "${tmpfiles[@]}"
+	if [[ -n ${user} && ${user} != root ]]; then
+		if runuser -u "${user}" -- test -w /run/victus-thermal/control; then
+			ok "${user} can change the fan mode now (no re-login needed)"
+		else
+			warn "${user} cannot write the fan mode yet; log out and back in"
+		fi
+	fi
 	systemctl daemon-reload
 	systemctl enable victus-thermal.service >/dev/null
 	systemctl restart victus-thermal.service
@@ -304,6 +331,27 @@ cmd_daemon() {
 		|| die "service failed to start: journalctl -u victus-thermal -n 30"
 	ok "victus-thermal is running"
 	"${LIB_DIR}/bin/victusctl" status || true
+}
+
+cmd_extension() {
+	local user="${SUDO_USER:-}"
+	if [[ -z ${user} || ${user} == root ]]; then
+		warn "run through sudo from your desktop user to install the GNOME extension"
+		return 0
+	fi
+	local uid
+	uid="$(id -u "${user}")"
+	info "installing the GNOME extension for ${user}"
+	# The extension is per-user and talks to the user's session bus.
+	if runuser -u "${user}" -- env \
+		HOME="$(getent passwd "${user}" | cut -d: -f6)" \
+		XDG_RUNTIME_DIR="/run/user/${uid}" \
+		DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${uid}/bus" \
+		"${HERE}/gnome-extension/install.sh"; then
+		ok "GNOME extension installed"
+	else
+		warn "GNOME extension not installed; run ./gnome-extension/install.sh without sudo"
+	fi
 }
 
 cmd_all() {
@@ -317,17 +365,18 @@ cmd_all() {
 		cmd_driver_install
 	fi
 	cmd_daemon
+	cmd_extension
 }
 
 main() {
 	local cmd="${1:-}"
 	case "${cmd}" in
-	check | deps | mok | driver-test | driver-install | daemon | all)
+	check | deps | mok | driver-test | driver-install | daemon | extension | all)
 		require_root "$@"
 		"cmd_${cmd//-/_}"
 		;;
 	*)
-		sed -n '4,14p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '4,15p' "$0" | sed 's/^# \{0,1\}//'
 		exit 1
 		;;
 	esac

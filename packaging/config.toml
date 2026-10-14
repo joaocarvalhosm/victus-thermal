@@ -25,10 +25,12 @@ twostate_max_duty = 70.0
 
 # One curve per platform profile, chosen in GNOME's power menu or with
 # `victusctl profile`. Points are [temperature degC, fan duty %]; the input is
-# the hottest sensor. 0 % means "leave it to the firmware" (lets the fans
-# stop when idle), 100 % means MAX. Write "firmware" instead of a curve to
-# leave a profile entirely to HP's own fan curve.
+# the hottest sensor. 0 % means "leave it to the HP firmware", which follows
+# the same profile (and lets the fans stop when idle); 100 % means MAX. Keep
+# the first point at 0 %: a curve that starts higher would hold the fans
+# below what the firmware wants at light load. Write "firmware" instead of a
+# curve to leave a profile entirely to HP's own fan curve.
 [curves]
-low-power   = [[60, 0], [70, 30], [80, 55], [90, 80], [95, 100]]
-balanced    = [[55, 0], [60, 30], [70, 45], [80, 70], [88, 100]]
-performance = [[45, 35], [60, 50], [70, 70], [80, 90], [85, 100]]
+low-power   = [[65, 0], [70, 30], [80, 55], [90, 80], [95, 100]]
+balanced    = [[60, 0], [65, 35], [75, 55], [85, 80], [90, 100]]
+performance = [[55, 0], [60, 45], [70, 65], [80, 85], [85, 100]]

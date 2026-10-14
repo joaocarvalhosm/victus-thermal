@@ -27,10 +27,20 @@ for f in /sys/devices/platform/hp-wmi/hwmon/hwmon*/pwm1_enable; do
 done
 
 echo "==> removing files"
-rm -f /etc/systemd/system/victus-thermal.service /usr/lib/tmpfiles.d/victus-thermal.conf
+rm -f /etc/systemd/system/victus-thermal.service /usr/lib/tmpfiles.d/victus-thermal.conf \
+	/etc/tmpfiles.d/victus-thermal-user.conf
 rm -f /usr/bin/victusctl
 rm -rf /usr/lib/victus-thermal /usr/share/doc/victus-thermal /run/victus-thermal
 systemctl daemon-reload
+
+if [[ -n ${SUDO_USER:-} && ${SUDO_USER} != root ]]; then
+	echo "==> removing GNOME extension for ${SUDO_USER}"
+	runuser -u "${SUDO_USER}" -- env \
+		HOME="$(getent passwd "${SUDO_USER}" | cut -d: -f6)" \
+		XDG_RUNTIME_DIR="/run/user/$(id -u "${SUDO_USER}")" \
+		DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u "${SUDO_USER}")/bus" \
+		"$(dirname "$0")/gnome-extension/install.sh" --uninstall || true
+fi
 
 echo "==> removing driver"
 if command -v dkms >/dev/null && [[ -n $(dkms status -m "${DKMS_NAME}" 2>/dev/null) ]]; then

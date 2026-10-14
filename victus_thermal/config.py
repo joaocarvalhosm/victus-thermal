@@ -20,10 +20,15 @@ PROFILES = ("low-power", "balanced", "performance")
 # firmware fan curve (only the emergency override still applies).
 FIRMWARE = "firmware"
 
+# Every curve starts at 0 %: at light load the HP firmware (whose thermal
+# mode follows the platform profile) drives the fans, as OMEN Gaming Hub
+# would. The curve only takes over once it asks for more, under real load,
+# where the firmware is too timid. A curve that starts above 0 % would hold
+# the fans *below* what the firmware wants when it is cool.
 DEFAULT_CURVES = {
-    "low-power": ((60, 0), (70, 30), (80, 55), (90, 80), (95, 100)),
-    "balanced": ((55, 0), (60, 30), (70, 45), (80, 70), (88, 100)),
-    "performance": ((45, 35), (60, 50), (70, 70), (80, 90), (85, 100)),
+    "low-power": ((65, 0), (70, 30), (80, 55), (90, 80), (95, 100)),
+    "balanced": ((60, 0), (65, 35), (75, 55), (85, 80), (90, 100)),
+    "performance": ((55, 0), (60, 45), (70, 65), (80, 85), (85, 100)),
 }
 
 
