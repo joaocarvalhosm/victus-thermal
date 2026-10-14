@@ -25,6 +25,7 @@ nem no mainline). Sem isso:
 | `driver/` | O `hp-wmi.c` **exato** do kernel Ubuntu 7.0.0-38, mais **uma** entrada na tabela: `8C2F` → `victus_s_thermal_params`. Isso libera os perfis térmicos da HP, a troca de cTGP/PPAB da GPU, a leitura de RPM e o controle manual de ventoinha. É instalado via DKMS, assinado com a sua chave MOK. |
 | `victus_thermal/` | Daemon (`victus-thermald`) com uma curva de ventoinha por perfil, proteção de emergência, watchdog do systemd e restauração garantida do controle do firmware. Só usa a biblioteca padrão do Python. |
 | `victusctl` | CLI sem root para ver o status, forçar um modo e trocar de perfil. |
+| `gnome-extension/` | Indicador na barra superior do GNOME: temperatura, RPM, perfil e modo das ventoinhas. |
 | `tools/catch-workqueue-warning.sh` | Identifica o driver que causa o `WARNING workqueue.c:2351` visto antes dos congelamentos. |
 | `extras/rtw89-stability.conf` | Contorno opcional para os timeouts do Wi-Fi Realtek 8852BE. |
 
@@ -79,6 +80,22 @@ victusctl mode max               # curve | auto | max (volta a "curve" no reboot
 
 Para jogar: **carregador ligado + perfil `performance`**. Isso ativa o modo
 térmico de desempenho da HP, o cTGP da GPU e a curva mais agressiva.
+
+### Extensão do GNOME
+
+Rode **sem sudo** e depois saia e entre de novo na sessão (no Wayland o GNOME
+só encontra extensões novas no login):
+
+```bash
+./gnome-extension/install.sh               # remover: --uninstall
+```
+
+O ícone de ventoinha na barra mostra a temperatura do sensor mais quente:
+laranja a partir de 80 °C, vermelho a partir de 90 °C ou em emergência. O
+menu mostra CPU/GPU/iGPU, RPM, tomada/bateria e o que o daemon está fazendo,
+e permite trocar o perfil (Economia, Equilibrado, Desempenho) e o modo das
+ventoinhas (Curva automática, Firmware HP, Máximo). A extensão não tem
+privilégios: lê `/run/victus-thermal/status.json` e chama o `victusctl`.
 
 ### Curvas
 

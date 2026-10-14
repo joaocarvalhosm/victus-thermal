@@ -1,0 +1,8 @@
+{
+  "uuid": "victus-thermal@joaocarvalhosm.github.io",
+  "name": "Victus Thermal",
+  "description": "Temperaturas, ventoinhas e perfil térmico do HP Victus na barra superior. Requer o serviço victus-thermal.",
+  "shell-version": ["50"],
+  "url": "https://github.com/joaocarvalhosm/victus-thermal",
+  "version-name": "1.0.0"
+}

@@ -1,0 +1,28 @@
+.victus-panel-label {
+  padding-left: 4px;
+  font-feature-settings: "tnum";
+}
+
+.victus-warm .victus-panel-label,
+.victus-warm .victus-panel-icon {
+  color: #f6a33b;
+}
+
+.victus-hot .victus-panel-label,
+.victus-hot .victus-panel-icon {
+  color: #ed333b;
+}
+
+.victus-offline .victus-panel-icon {
+  opacity: 0.5;
+}
+
+.victus-detail {
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.victus-section-title {
+  font-weight: bold;
+  font-size: 0.85em;
+}
