@@ -347,8 +347,11 @@ enum hp_wmi_command {
 
 /*
  * Keyboard lighting interface used by OMEN Gaming Hub (command 0x20009).
- * On board 8C2F the BIOS maps GET to the EC keyboard brightness register and
- * SET writes it and asks the EC to apply it; bit 7 is the on/off state.
+ * The BIOS maps GET to the EC keyboard brightness register and SET writes it
+ * and asks the EC to apply it; bit 7 is the on/off state. CAPS bit 0 tells
+ * whether the keyboard is driven through this interface at all: on board 8C2F
+ * (white backlight) it is clear, GET/SET still succeed but the EC ignores the
+ * value, and the light stays on its Fn key only.
  */
 enum hp_wmi_kbd_backlight_commandtype {
 	HPWMI_KBD_BACKLIGHT_CAPS_QUERY	= 0x01,
@@ -356,6 +359,7 @@ enum hp_wmi_kbd_backlight_commandtype {
 	HPWMI_KBD_BACKLIGHT_SET_QUERY	= 0x05,
 };
 
+#define HP_KBD_BACKLIGHT_CAPS_SUPPORTED	BIT(0)
 #define HP_KBD_BACKLIGHT_ON_BIT		BIT(7)
 #define HP_KBD_BACKLIGHT_OFF		0x64
 #define HP_KBD_BACKLIGHT_ON		0xE4
@@ -2323,8 +2327,10 @@ static void __init hp_kbd_backlight_setup(struct platform_device *device)
 	raw = hp_kbd_backlight_read();
 	dev_info(&device->dev, "keyboard backlight: caps %d [%02x %02x], state %d (0x%02x)\n",
 		 caps_ret, caps[0], caps[1], raw, raw < 0 ? 0 : raw);
-	if (raw < 0)
+	if (caps_ret || !(caps[0] & HP_KBD_BACKLIGHT_CAPS_SUPPORTED) || raw < 0) {
+		dev_info(&device->dev, "keyboard backlight not controllable through WMI\n");
 		return;
+	}
 
 	hp_kbd_led.name = "hp::kbd_backlight";
 	hp_kbd_led.max_brightness = 1;

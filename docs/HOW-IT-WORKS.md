@@ -38,8 +38,11 @@ WMI que a BIOS implementa e valida. Com isso o driver ganha:
 5 grava e manda o EC aplicar (bit 7 = aceso; `0x64` apaga, `0xE4` acende),
 conforme os métodos `LM04`/`LM05` da DSDT da 8C2F. O evento `0x0D` (atalho Fn)
 vira `brightness_hw_changed` para o UPower. Só é registrado em placas
-`victus_s`, e só se a leitura funcionar; a resposta da BIOS vai para o log
-(`keyboard backlight: caps … state …`).
+`victus_s` cuja BIOS liga o bit 0 da consulta de capacidades (subcomando 1,
+método `LM01`); a resposta vai para o log (`keyboard backlight: caps … state
+…`). **Na 8C2F esse bit é 0** (`caps [06 3c]`): os comandos são aceitos e o
+valor é lido de volta, mas o controlador não acende nem apaga a luz branca,
+que só responde ao atalho Fn. Por isso o LED não é registrado nela.
 
 O firmware reverte o modo manual depois de 120 s; o próprio driver reenvia o
 comando a cada 90 s (*keep-alive*).

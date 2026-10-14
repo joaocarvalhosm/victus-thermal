@@ -2,6 +2,16 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [1.7.1] - 2026-10-14
+### Corrigido
+- O driver (DKMS 1.2.0) só registra a luz do teclado quando a BIOS informa
+  que ela é controlável pelo comando WMI `0x20009` (bit 0 da consulta de
+  capacidades). Na 8C2F, com teclado branco, esse bit é 0: a BIOS aceita os
+  comandos, mas o controlador os ignora, e a luz só responde ao atalho Fn.
+  Por isso a luz não apagava, e o GNOME ficava gravando um valor sem efeito
+  no controlador. Agora nada é registrado nem gravado nesse modelo, e o botão
+  "Luz do teclado" não aparece.
+
 ## [1.7.0] - 2026-10-14
 ### Adicionado
 - **Luz do teclado:** o driver (DKMS 1.1.0) expõe `hp::kbd_backlight`

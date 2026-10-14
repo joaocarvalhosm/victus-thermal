@@ -10,7 +10,7 @@ Secure Boot ligado.
 |---|---|
 | **Notebook** | HP Victus 15-fb2xxx, placa **8C2F** (Ryzen 5 8645HS + RTX 4050) |
 | **Sistema** | Ubuntu 26.04, kernel 7.0.x, GNOME 50 (Wayland), Secure Boot ligado |
-| **Versão** | 1.7.0, veja o [CHANGELOG](CHANGELOG.md) |
+| **Versão** | 1.7.1, veja o [CHANGELOG](CHANGELOG.md) |
 
 ---
 
@@ -58,8 +58,6 @@ Este projeto corrige isso na raiz e acrescenta o que o OMEN fazia.
   qualquer modo.
 - 🖥️ **Indicador na barra do GNOME:** temperatura, RPM e controles, com
   atualização instantânea.
-- ⌨️ **Luz do teclado:** apaga com a tela e, opcionalmente, depois de um
-  tempo sem uso, com um botão nas configurações rápidas do GNOME.
 - 🎮 **NVIDIA só sob demanda:** a RTX desliga quando ninguém usa, e os jogos
   continuam abrindo nela.
 - 🔐 **Secure Boot ligado:** o driver é assinado com a sua chave (MOK) e
@@ -137,8 +135,13 @@ ventoinha correspondente.
 
 ### Luz do teclado
 
-Nas **configurações rápidas** do GNOME (canto superior direito) aparece o
-botão **Luz do teclado**:
+> **Não disponível no Victus 15-fb2xxx (8C2F).** Neste modelo, o teclado
+> branco só responde ao atalho Fn: a BIOS informa que a luz não é controlável
+> pelo sistema, e o botão abaixo não aparece. O suporte fica para modelos em
+> que a BIOS informa o contrário.
+
+Quando a luz é controlável, aparece nas **configurações rápidas** do GNOME
+(canto superior direito) o botão **Luz do teclado**:
 
 - **ligado:** a luz apaga depois do tempo escolhido sem usar teclado e mouse
   (seta ao lado: 30 s, 1 min, 2 min ou 5 min) e acende assim que você volta;
