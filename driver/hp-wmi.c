@@ -23,6 +23,7 @@
 #include <linux/input.h>
 #include <linux/input/sparse-keymap.h>
 #include <linux/kernel.h>
+#include <linux/leds.h>
 #include <linux/limits.h>
 #include <linux/minmax.h>
 #include <linux/module.h>
@@ -341,7 +342,23 @@ enum hp_wmi_command {
 	HPWMI_WRITE	= 0x02,
 	HPWMI_ODM	= 0x03,
 	HPWMI_GM	= 0x20008,
+	HPWMI_KBD_BACKLIGHT = 0x20009,
 };
+
+/*
+ * Keyboard lighting interface used by OMEN Gaming Hub (command 0x20009).
+ * On board 8C2F the BIOS maps GET to the EC keyboard brightness register and
+ * SET writes it and asks the EC to apply it; bit 7 is the on/off state.
+ */
+enum hp_wmi_kbd_backlight_commandtype {
+	HPWMI_KBD_BACKLIGHT_CAPS_QUERY	= 0x01,
+	HPWMI_KBD_BACKLIGHT_GET_QUERY	= 0x04,
+	HPWMI_KBD_BACKLIGHT_SET_QUERY	= 0x05,
+};
+
+#define HP_KBD_BACKLIGHT_ON_BIT		BIT(7)
+#define HP_KBD_BACKLIGHT_OFF		0x64
+#define HP_KBD_BACKLIGHT_ON		0xE4
 
 enum hp_wmi_hardware_mask {
 	HPWMI_DOCK_MASK		= 0x01,
@@ -1115,6 +1132,44 @@ static struct attribute *hp_wmi_attrs[] = {
 };
 ATTRIBUTE_GROUPS(hp_wmi);
 
+static struct led_classdev hp_kbd_led;
+static bool hp_kbd_led_registered;
+
+/* Raw EC keyboard brightness byte, or a negative errno. */
+static int hp_kbd_backlight_read(void)
+{
+	u8 data[4] = { 0 };
+	int ret;
+
+	ret = hp_wmi_perform_query(HPWMI_KBD_BACKLIGHT_GET_QUERY, HPWMI_KBD_BACKLIGHT,
+				   data, sizeof(data), sizeof(data));
+	if (ret)
+		return ret < 0 ? ret : -EIO;
+
+	return data[0];
+}
+
+static enum led_brightness hp_kbd_led_get(struct led_classdev *cdev)
+{
+	int raw = hp_kbd_backlight_read();
+
+	if (raw < 0)
+		return cdev->brightness;
+
+	return (raw & HP_KBD_BACKLIGHT_ON_BIT) ? 1 : 0;
+}
+
+static int hp_kbd_led_set(struct led_classdev *cdev, enum led_brightness value)
+{
+	u8 data = value ? HP_KBD_BACKLIGHT_ON : HP_KBD_BACKLIGHT_OFF;
+	int ret;
+
+	ret = hp_wmi_perform_query(HPWMI_KBD_BACKLIGHT_SET_QUERY, HPWMI_KBD_BACKLIGHT,
+				   &data, sizeof(data), 0);
+
+	return ret <= 0 ? ret : -EIO;
+}
+
 static void hp_wmi_notify(union acpi_object *obj, void *context)
 {
 	u32 event_id, event_data;
@@ -1215,6 +1270,10 @@ static void hp_wmi_notify(union acpi_object *obj, void *context)
 	case HPWMI_PROXIMITY_SENSOR:
 		break;
 	case HPWMI_BACKLIT_KB_BRIGHTNESS:
+		/* Fn backlight key: the EC already toggled it, tell userspace. */
+		if (hp_kbd_led_registered)
+			led_classdev_notify_brightness_hw_changed(&hp_kbd_led,
+								  hp_kbd_led_get(&hp_kbd_led));
 		break;
 	case HPWMI_PEAKSHIFT_PERIOD:
 		break;
@@ -2249,6 +2308,38 @@ static int thermal_profile_setup(struct platform_device *device)
 }
 
 static int hp_wmi_hwmon_init(void);
+static bool is_victus_s_thermal_profile(void);
+
+static void __init hp_kbd_backlight_setup(struct platform_device *device)
+{
+	u8 caps[4] = { 0 };
+	int caps_ret, raw, ret;
+
+	if (!is_victus_s_thermal_profile())
+		return;
+
+	caps_ret = hp_wmi_perform_query(HPWMI_KBD_BACKLIGHT_CAPS_QUERY, HPWMI_KBD_BACKLIGHT,
+					caps, sizeof(caps), sizeof(caps));
+	raw = hp_kbd_backlight_read();
+	dev_info(&device->dev, "keyboard backlight: caps %d [%02x %02x], state %d (0x%02x)\n",
+		 caps_ret, caps[0], caps[1], raw, raw < 0 ? 0 : raw);
+	if (raw < 0)
+		return;
+
+	hp_kbd_led.name = "hp::kbd_backlight";
+	hp_kbd_led.max_brightness = 1;
+	hp_kbd_led.brightness = (raw & HP_KBD_BACKLIGHT_ON_BIT) ? 1 : 0;
+	hp_kbd_led.brightness_get = hp_kbd_led_get;
+	hp_kbd_led.brightness_set_blocking = hp_kbd_led_set;
+	hp_kbd_led.flags = LED_BRIGHT_HW_CHANGED;
+
+	ret = devm_led_classdev_register(&device->dev, &hp_kbd_led);
+	if (ret) {
+		dev_warn(&device->dev, "could not register keyboard backlight: %d\n", ret);
+		return;
+	}
+	hp_kbd_led_registered = true;
+}
 
 static int __init hp_wmi_bios_setup(struct platform_device *device)
 {
@@ -2276,6 +2367,7 @@ static int __init hp_wmi_bios_setup(struct platform_device *device)
 		return err;
 
 	thermal_profile_setup(device);
+	hp_kbd_backlight_setup(device);
 
 	return 0;
 }

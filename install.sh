@@ -72,6 +72,25 @@ hp_hwmon() {
 	return 1
 }
 
+# Versions of our DKMS package installed for the running kernel.
+installed_driver_versions() {
+	dkms status -m "${DKMS_NAME}" -k "${KVER}" 2>/dev/null \
+		| sed -n 's|^[^/]*/\([^,:]*\).*: installed.*|\1|p'
+}
+
+# UPower only looks for keyboard lights when it starts; make GNOME see ours.
+refresh_upower() {
+	if [[ -e /sys/class/leds/hp::kbd_backlight ]] && systemctl is-active --quiet upower; then
+		systemctl restart upower || warn "could not restart upower; reboot to enable keyboard light control"
+	fi
+}
+
+# True when the hp_wmi in memory is the one modprobe would load from disk.
+loaded_driver_is_current() {
+	[[ -r /sys/module/hp_wmi/srcversion ]] \
+		&& [[ $(cat /sys/module/hp_wmi/srcversion) == "$(modinfo -F srcversion hp_wmi 2>/dev/null)" ]]
+}
+
 hp_wmi_platform_profile_registered() {
 	grep -qx "hp-wmi" /sys/class/platform-profile/*/name 2>/dev/null
 }
@@ -210,6 +229,16 @@ cmd_driver_test() {
 	if [[ -n ${hw:-} ]]; then
 		ok "fans: $(cat "${hw}/fan1_input" 2>/dev/null || echo ?) / $(cat "${hw}/fan2_input" 2>/dev/null || echo ?) RPM"
 	fi
+	# Keyboard light is optional: report what the BIOS answered, never fail.
+	local kbd
+	kbd="$(journalctl -k --since "${since}" --no-pager -o cat 2>/dev/null \
+		| grep -m1 'keyboard backlight:' || true)"
+	if [[ -e /sys/class/leds/hp::kbd_backlight ]]; then
+		ok "keyboard light control available (${kbd#*: })"
+		refresh_upower
+	else
+		warn "no keyboard light control (${kbd:-no answer from the BIOS}); fans are unaffected"
+	fi
 	local errors
 	errors="$(journalctl -k --since "${since}" --no-pager -o cat 2>/dev/null \
 		| grep -iE 'hp_wmi|hp-wmi' | grep -iE 'fail|error|unable' || true)"
@@ -237,9 +266,13 @@ cmd_driver_install() {
 	cmd_check >/dev/null
 	local src="/usr/src/${DKMS_NAME}-${DKMS_VERSION}"
 	info "installing ${DKMS_NAME} ${DKMS_VERSION} with DKMS"
-	if [[ -n $(dkms status -m "${DKMS_NAME}" -v "${DKMS_VERSION}" 2>/dev/null) ]]; then
-		dkms remove -m "${DKMS_NAME}" -v "${DKMS_VERSION}" --all >/dev/null
-	fi
+	# Remove every version of ours first, so only one is ever installed.
+	local v
+	for v in $(dkms status -m "${DKMS_NAME}" 2>/dev/null \
+		| sed -n 's|^[^/]*/\([^,:]*\).*|\1|p' | sort -u); do
+		dkms remove -m "${DKMS_NAME}" -v "${v}" --all >/dev/null
+		rm -rf "/usr/src/${DKMS_NAME}-${v}"
+	done
 	rm -rf "${src}"
 	install -d -m 0755 "${src}"
 	install -m 0644 "${HERE}/driver/hp-wmi.c" "${HERE}/driver/Makefile" \
@@ -256,10 +289,11 @@ cmd_driver_install() {
 		ok "signed by: $(modinfo -F signer hp_wmi)"
 	fi
 
-	if ! hp_wmi_platform_profile_registered; then
+	if ! loaded_driver_is_current; then
 		info "loading the installed driver"
 		modprobe -r hp_wmi 2>/dev/null || true
 		modprobe hp_wmi
+		refresh_upower
 	fi
 	if hp_wmi_platform_profile_registered; then
 		ok "thermal profiles active"
@@ -365,8 +399,8 @@ cmd_all() {
 	cmd_check
 	cmd_deps
 	cmd_mok
-	if hp_wmi_platform_profile_registered && [[ $(modinfo -n hp_wmi) == */updates/* ]]; then
-		ok "patched driver already installed"
+	if [[ $(installed_driver_versions) == "${DKMS_VERSION}" ]] && loaded_driver_is_current; then
+		ok "patched driver ${DKMS_VERSION} already installed and loaded"
 	else
 		cmd_driver_test
 		cmd_driver_install

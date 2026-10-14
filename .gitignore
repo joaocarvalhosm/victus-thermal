@@ -10,3 +10,4 @@ __pycache__/
 Module.symvers
 modules.order
 .tmp_versions/
+gnome-extension/*/schemas/gschemas.compiled
