@@ -192,7 +192,7 @@ class Daemon:
             "fans_rpm": list(r.rpm),
             "decision": {"kind": d.kind, "pwm": d.pwm, "duty": d.duty,
                          "curve_temp": d.curve_temp, "reason": d.reason,
-                         "applied_pwm": applied},
+                         "applied_pwm": applied, "hold_remaining": d.hold_remaining},
             "emergency": self.policy.state.emergency,
             "error": error,
         }

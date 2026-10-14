@@ -20,15 +20,16 @@ PROFILES = ("low-power", "balanced", "performance")
 # firmware fan curve (only the emergency override still applies).
 FIRMWARE = "firmware"
 
-# Every curve starts at 0 %: at light load the HP firmware (whose thermal
-# mode follows the platform profile) drives the fans, as OMEN Gaming Hub
-# would. The curve only takes over once it asks for more, under real load,
-# where the firmware is too timid. A curve that starts above 0 % would hold
-# the fans *below* what the firmware wants when it is cool.
+# Every curve starts at 0 %: when cool the HP firmware (whose thermal mode
+# follows the platform profile) drives the fans and lets them stop. A curve
+# that starts above 0 % would hold the fans *below* what the firmware wants.
+# The curves take over a little before the firmware's own start threshold,
+# at a low speed, so warm spikes give a gentle steady fan instead of the
+# firmware's full-speed start/stop bursts (with hold_time below).
 DEFAULT_CURVES = {
-    "low-power": ((65, 0), (70, 30), (80, 55), (90, 80), (95, 100)),
-    "balanced": ((60, 0), (65, 35), (75, 55), (85, 80), (90, 100)),
-    "performance": ((55, 0), (60, 45), (70, 65), (80, 85), (85, 100)),
+    "low-power": ((58, 0), (60, 20), (70, 30), (80, 55), (90, 80), (95, 100)),
+    "balanced": ((52, 0), (55, 25), (65, 35), (75, 55), (85, 80), (90, 100)),
+    "performance": ((50, 0), (52, 35), (60, 45), (70, 65), (80, 85), (85, 100)),
 }
 
 
@@ -38,7 +39,17 @@ class Config:
     emergency_temp: float = 95.0
     emergency_release: float = 85.0
     hysteresis: float = 4.0
-    smoothing: float = 0.5
+    # ~7 s time constant at the 2 s poll: Ryzen Tctl jumps for a second or
+    # two under bursty load; only sustained heat should move the fans. The
+    # emergency check always uses raw temperatures.
+    smoothing: float = 0.25
+    # Once the curve has spun the fans up, keep them at the curve's lowest
+    # speed for at least this long before handing back to the firmware, so
+    # repeated spikes do not turn into start/stop cycles.
+    hold_time: float = 90.0
+    # The curve must ask for the fans continuously this long before it takes
+    # over from the firmware (a curve at 100 % takes over at once).
+    engage_delay: float = 6.0
     # Two-state fallback (stock driver without manual pwm): force MAX when the
     # curve asks for at least this duty, release below it minus 15 %.
     twostate_max_duty: float = 70.0
@@ -60,7 +71,7 @@ def parse(raw: dict) -> Config:
     """Build a Config from a parsed TOML document. Raises ValueError."""
     known = {
         "poll_interval", "emergency_temp", "emergency_release", "hysteresis",
-        "smoothing", "twostate_max_duty", "curves",
+        "smoothing", "hold_time", "engage_delay", "twostate_max_duty", "curves",
     }
     unknown = set(raw) - known
     if unknown:
@@ -93,6 +104,8 @@ def parse(raw: dict) -> Config:
         emergency_release=emergency_release,
         hysteresis=_number(raw, "hysteresis", d.hysteresis, 0, 15),
         smoothing=_number(raw, "smoothing", d.smoothing, 0.05, 1),
+        hold_time=_number(raw, "hold_time", d.hold_time, 0, 600),
+        engage_delay=_number(raw, "engage_delay", d.engage_delay, 0, 60),
         twostate_max_duty=_number(raw, "twostate_max_duty", d.twostate_max_duty, 20, 100),
         curves=curves,
     )

@@ -16,8 +16,20 @@ emergency_release = 85.0
 # Degrees the temperature must fall before the fans slow down again.
 hysteresis = 4.0
 
-# Smoothing of the temperature input (0.05 = very smooth, 1 = raw).
-smoothing = 0.5
+# Smoothing of the temperature input (0.05 = very smooth, 1 = raw). The
+# default (~7 s) ignores the one-second spikes Ryzen CPUs make under bursty
+# load; the emergency check above always uses raw temperatures.
+smoothing = 0.25
+
+# Seconds the fans keep running at the curve's lowest speed after the
+# temperature drops below the curve, before control returns to the firmware
+# (0 - 600). Stops repeated spikes from turning into start/stop cycles.
+hold_time = 90.0
+
+# Seconds the curve must keep asking for the fans before it takes over from
+# the firmware (0 - 60). Ignores short bursts; a curve at 100 % takes over
+# at once, and the emergency check is always immediate.
+engage_delay = 6.0
 
 # Only used with the stock driver (fans limited to AUTO/MAX): switch to MAX
 # when the curve asks for at least this duty, back to AUTO 15 % below it.
@@ -28,9 +40,11 @@ twostate_max_duty = 70.0
 # the hottest sensor. 0 % means "leave it to the HP firmware", which follows
 # the same profile (and lets the fans stop when idle); 100 % means MAX. Keep
 # the first point at 0 %: a curve that starts higher would hold the fans
-# below what the firmware wants at light load. Write "firmware" instead of a
-# curve to leave a profile entirely to HP's own fan curve.
+# below what the firmware wants at light load. The second point is the
+# gentle speed used just before the firmware's own (abrupt) start threshold
+# and during hold_time. Write "firmware" instead of a curve to leave a
+# profile entirely to HP's own fan curve.
 [curves]
-low-power   = [[65, 0], [70, 30], [80, 55], [90, 80], [95, 100]]
-balanced    = [[60, 0], [65, 35], [75, 55], [85, 80], [90, 100]]
-performance = [[55, 0], [60, 45], [70, 65], [80, 85], [85, 100]]
+low-power   = [[58, 0], [60, 20], [70, 30], [80, 55], [90, 80], [95, 100]]
+balanced    = [[52, 0], [55, 25], [65, 35], [75, 55], [85, 80], [90, 100]]
+performance = [[50, 0], [52, 35], [60, 45], [70, 65], [80, 85], [85, 100]]

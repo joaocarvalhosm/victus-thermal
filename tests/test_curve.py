@@ -40,6 +40,14 @@ class FanCurveTest(unittest.TestCase):
             FanCurve.from_pairs([50, 70])
 
 
+class MinActiveDutyTest(unittest.TestCase):
+    def test_lowest_nonzero_point(self):
+        self.assertEqual(FanCurve(((50, 0), (55, 25), (90, 100))).min_active_duty(), 25)
+
+    def test_curve_without_zero(self):
+        self.assertEqual(FanCurve(((40, 35), (80, 100))).min_active_duty(), 35)
+
+
 class HysteresisTest(unittest.TestCase):
     def test_rises_immediately(self):
         h = Hysteresis(band=4)

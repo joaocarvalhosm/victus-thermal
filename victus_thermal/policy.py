@@ -11,6 +11,7 @@ Order of precedence, highest first:
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 
 from .config import FIRMWARE, Config
@@ -30,6 +31,7 @@ class Decision:
     reason: str
     duty: float | None = None
     curve_temp: float | None = None
+    hold_remaining: float | None = None
 
 
 @dataclass
@@ -38,6 +40,8 @@ class PolicyState:
     hysteresis: Hysteresis
     emergency: bool = False
     twostate_max: bool = False
+    hold_until: float | None = None    # set while the curve is in control
+    want_since: float | None = None    # curve has asked for fans since
 
     @classmethod
     def for_config(cls, cfg: Config) -> PolicyState:
@@ -63,8 +67,10 @@ class Policy:
         return {k: v for k, v in (("cpu", r.cpu), ("igpu", r.igpu), ("dgpu", r.dgpu))
                 if v is not None}
 
-    def decide(self, r: Readings, mode: str, manual_supported: bool) -> Decision:
+    def decide(self, r: Readings, mode: str, manual_supported: bool,
+               now: float | None = None) -> Decision:
         cfg, st = self.cfg, self.state
+        now = time.monotonic() if now is None else now
         sensors = self._sensors(r)
 
         if sensors and max(sensors.values()) >= cfg.emergency_temp:
@@ -75,22 +81,26 @@ class Policy:
             hot = max(sensors, key=sensors.get) if sensors else "?"
             return Decision(MAX, None, f"emergency: {hot} {sensors.get(hot)}C")
 
-        if mode == AUTO:
-            return Decision(AUTO, None, "override: firmware control")
-        if mode == MAX:
+        if mode in (AUTO, MAX):
+            st.hold_until = st.want_since = None
+            if mode == AUTO:
+                return Decision(AUTO, None, "override: firmware control")
             return Decision(MAX, None, "override: max")
 
         if r.cpu is None:
             st.smoothing.reset()
             st.hysteresis.reset()
+            st.hold_until = None
             return Decision(AUTO, None, "cpu sensor unavailable: firmware control")
 
         profile = r.profile if r.profile in cfg.curves else "balanced"
         curve = cfg.curves[profile]
         if curve == FIRMWARE:
+            st.hold_until = None
             return Decision(AUTO, None, f"{profile}: firmware curve")
 
-        temp = st.hysteresis.update(st.smoothing.update(max(sensors.values())))
+        smoothed = st.smoothing.update(max(sensors.values()))
+        temp = st.hysteresis.update(smoothed)
         duty = curve.duty(temp)
 
         if not manual_supported:
@@ -103,7 +113,32 @@ class Policy:
                             duty, temp)
 
         if duty <= 0:
+            st.want_since = None
+            if st.hold_until is not None and now < st.hold_until:
+                hold = curve.min_active_duty()
+                remaining = st.hold_until - now
+                return Decision(MANUAL, duty_to_pwm(hold),
+                                f"{profile}: holding {hold:.0f}% for {remaining:.0f}s",
+                                hold, temp, remaining)
+            st.hold_until = None
             return Decision(AUTO, None, f"{profile}: below curve at {temp:.1f}C", duty, temp)
+        if st.hold_until is None and duty < 100:
+            # Not in control yet: only take over from the firmware for heat
+            # that lasts, not for a spike. Judge that on the smoothed
+            # temperature without hysteresis, which would otherwise hold the
+            # peak of a spike and make it look sustained.
+            if curve.duty(smoothed) <= 0:
+                st.want_since = None
+                return Decision(AUTO, None, f"{profile}: below curve at {smoothed:.1f}C",
+                                0.0, smoothed)
+            if st.want_since is None:
+                st.want_since = now
+            waited = now - st.want_since
+            if waited < cfg.engage_delay:
+                return Decision(AUTO, None,
+                                f"{profile}: warming {duty:.0f}% at {temp:.1f}C "
+                                f"({waited:.0f}/{cfg.engage_delay:.0f}s)", duty, temp)
+        st.hold_until = now + cfg.hold_time
         if duty >= 100:
             return Decision(MAX, None, f"{profile}: curve max at {temp:.1f}C", duty, temp)
         return Decision(MANUAL, duty_to_pwm(duty), f"{profile}: {duty:.0f}% at {temp:.1f}C",

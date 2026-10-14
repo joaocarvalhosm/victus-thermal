@@ -39,6 +39,11 @@ class FanCurve:
             raise ValueError(f"curve points must be [temperature, duty] pairs: {exc}") from exc
         return cls(pts)
 
+    def min_active_duty(self) -> float:
+        """Lowest non-zero duty on the curve: the gentle speed fans are held
+        at while cooling down (see Config.hold_time)."""
+        return min((d for _, d in self.points if d > 0), default=100.0)
+
     def duty(self, temp: float) -> float:
         first_t, first_d = self.points[0]
         if temp <= first_t:

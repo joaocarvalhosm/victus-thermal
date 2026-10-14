@@ -61,9 +61,10 @@ class DaemonTest(unittest.TestCase):
     def make(self, manual_pwm=True, config_text=None):
         fs = FakeSysfs(manual_pwm)
         self.addCleanup(fs.cleanup)
-        if config_text is not None:
-            with open(fs.config, "w") as f:
-                f.write(config_text)
+        # Most tests check a single step; engage_delay is covered in
+        # test_policy.
+        with open(fs.config, "w") as f:
+            f.write("engage_delay = 0\n" + (config_text or ""))
         daemon = Daemon(Hardware(root=fs.root, nvidia_smi="/nonexistent/nvidia-smi"),
                         config_path=fs.config, runtime_dir=fs.run_dir)
         return fs, daemon
@@ -103,7 +104,7 @@ class DaemonTest(unittest.TestCase):
         self.assertGreater(status["decision"]["pwm"], 40)
 
     def test_floor_resets_after_returning_to_firmware(self):
-        fs, d = self.make(config_text="smoothing = 1.0\nhysteresis = 0\n")
+        fs, d = self.make(config_text="smoothing = 1.0\nhysteresis = 0\nhold_time = 0\n")
         fs.set(f"{HP}/pwm1", "150")
         fs.set("sys/class/hwmon/hwmon6/temp1_input", "61000")
         d.step()
@@ -113,7 +114,9 @@ class DaemonTest(unittest.TestCase):
         fs.set(f"{HP}/pwm1", "20")                # firmware slowed down meanwhile
         fs.set("sys/class/hwmon/hwmon6/temp1_input", "61000")
         status = d.step()
-        self.assertEqual(status["decision"]["applied_pwm"], 20)
+        # the floor taken from the earlier hand-over (150) is gone
+        self.assertEqual(status["decision"]["applied_pwm"], status["decision"]["pwm"])
+        self.assertLess(status["decision"]["applied_pwm"], 150)
 
     def test_no_floor_when_coming_down_from_max(self):
         fs, d = self.make(config_text="smoothing = 1.0\nhysteresis = 0\n")

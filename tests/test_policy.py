@@ -19,6 +19,7 @@ def cfg(**kw):
     }
     curves.update(kw.pop("curves", {}))
     # smoothing=1 and hysteresis=0 make single-step expectations exact
+    kw.setdefault("engage_delay", 0.0)
     return Config(smoothing=1.0, hysteresis=0.0, curves=curves, **kw)
 
 
@@ -83,9 +84,104 @@ class CurveTest(unittest.TestCase):
         self.assertEqual(p.decide(readings(cpu=85), "curve", True).kind, AUTO)
 
     def test_hysteresis_holds_on_the_way_down(self):
-        p = Policy(Config(smoothing=1.0, hysteresis=5.0, curves=cfg().curves))
+        p = Policy(Config(smoothing=1.0, hysteresis=5.0, engage_delay=0.0, curves=cfg().curves))
         self.assertEqual(p.decide(readings(cpu=75), "curve", True).pwm, 166)
         self.assertEqual(p.decide(readings(cpu=72), "curve", True).pwm, 166)
+
+
+class HoldTest(unittest.TestCase):
+    """Fans that the curve has started keep a gentle speed for hold_time."""
+
+    def policy(self, hold=90.0):
+        return Policy(cfg(hold_time=hold))
+
+    def test_holds_lowest_speed_after_cooling(self):
+        p = self.policy()
+        self.assertEqual(p.decide(readings(cpu=75), "curve", True, now=0).kind, MANUAL)
+        d = p.decide(readings(cpu=45), "curve", True, now=10)
+        self.assertEqual(d.kind, MANUAL)
+        self.assertEqual(d.duty, 30)                 # balanced curve's lowest speed
+        self.assertAlmostEqual(d.hold_remaining, 80)
+
+    def test_releases_to_firmware_after_hold(self):
+        p = self.policy()
+        p.decide(readings(cpu=75), "curve", True, now=0)
+        self.assertEqual(p.decide(readings(cpu=45), "curve", True, now=91).kind, AUTO)
+
+    def test_each_warm_reading_restarts_the_hold(self):
+        p = self.policy()
+        p.decide(readings(cpu=75), "curve", True, now=0)
+        p.decide(readings(cpu=70), "curve", True, now=80)          # still warm
+        self.assertEqual(p.decide(readings(cpu=45), "curve", True, now=150).kind, MANUAL)
+        self.assertEqual(p.decide(readings(cpu=45), "curve", True, now=171).kind, AUTO)
+
+    def test_cool_machine_never_engages(self):
+        p = self.policy()
+        for t in range(0, 300, 2):
+            self.assertEqual(p.decide(readings(cpu=45), "curve", True, now=t).kind, AUTO)
+
+    def test_override_cancels_hold(self):
+        p = self.policy()
+        p.decide(readings(cpu=75), "curve", True, now=0)
+        p.decide(readings(cpu=45), "auto", True, now=5)
+        self.assertEqual(p.decide(readings(cpu=45), "curve", True, now=6).kind, AUTO)
+
+    def test_emergency_still_wins_during_hold(self):
+        p = self.policy()
+        p.decide(readings(cpu=75), "curve", True, now=0)
+        self.assertEqual(p.decide(readings(cpu=97), "curve", True, now=5).kind, MAX)
+
+    def test_zero_hold_disables_it(self):
+        p = self.policy(hold=0)
+        p.decide(readings(cpu=75), "curve", True, now=0)
+        self.assertEqual(p.decide(readings(cpu=45), "curve", True, now=0.1).kind, AUTO)
+
+
+class EngageDelayTest(unittest.TestCase):
+    def test_waits_for_sustained_demand(self):
+        p = Policy(cfg(engage_delay=6.0))
+        kinds = [p.decide(readings(cpu=75), "curve", True, now=t).kind for t in (0, 2, 4, 6)]
+        self.assertEqual(kinds, [AUTO, AUTO, AUTO, MANUAL])
+
+    def test_interrupted_demand_starts_over(self):
+        p = Policy(cfg(engage_delay=6.0))
+        p.decide(readings(cpu=75), "curve", True, now=0)
+        p.decide(readings(cpu=45), "curve", True, now=4)
+        self.assertEqual(p.decide(readings(cpu=75), "curve", True, now=6).kind, AUTO)
+
+    def test_full_curve_is_immediate(self):
+        p = Policy(cfg(engage_delay=6.0))
+        self.assertEqual(p.decide(readings(cpu=91), "curve", True, now=0).kind, MAX)
+
+    def test_no_delay_while_already_in_control(self):
+        p = Policy(cfg(engage_delay=6.0))
+        for t in (0, 2, 4, 6):
+            p.decide(readings(cpu=75), "curve", True, now=t)
+        self.assertEqual(p.decide(readings(cpu=80), "curve", True, now=8).kind, MANUAL)
+
+
+class SpikeFilterTest(unittest.TestCase):
+    def test_short_spike_does_not_start_the_fans(self):
+        p = Policy(Config())                         # shipped defaults
+        for t in range(0, 20, 2):
+            p.decide(readings(cpu=45), "curve", True, now=t)
+        # a 2-sample burst to 62 C (Tctl spike while opening an app)
+        kinds = [p.decide(readings(cpu=62), "curve", True, now=20 + 2 * i).kind
+                 for i in range(2)]
+        self.assertEqual(kinds, [AUTO, AUTO])
+
+    def test_sustained_heat_starts_the_fans(self):
+        p = Policy(Config())
+        for t in range(0, 20, 2):
+            p.decide(readings(cpu=45), "curve", True, now=t)
+        kinds = [p.decide(readings(cpu=62), "curve", True, now=20 + 2 * i).kind
+                 for i in range(10)]
+        self.assertIn(MANUAL, kinds)
+
+    def test_emergency_ignores_smoothing(self):
+        p = Policy(Config())
+        p.decide(readings(cpu=45), "curve", True, now=0)
+        self.assertEqual(p.decide(readings(cpu=96), "curve", True, now=2).kind, MAX)
 
 
 class TwoStateTest(unittest.TestCase):

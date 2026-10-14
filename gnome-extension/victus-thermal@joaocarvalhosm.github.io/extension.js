@@ -52,6 +52,10 @@ function describeDecision(s) {
     const d = s.decision;
     if (s.emergency)
         return 'EMERGÊNCIA: ventoinhas no máximo até esfriar';
+    if (d.kind === 'manual' && d.hold_remaining) {
+        return `Suavizando: ${Math.round(d.duty)}% por mais ` +
+            `${Math.ceil(d.hold_remaining)} s antes de voltar ao firmware`;
+    }
     if (d.kind === 'manual') {
         const text = `Curva: ${Math.round(d.duty)}% a ${Math.round(d.curve_temp)} °C`;
         return d.applied_pwm > d.pwm ? `${text} (mantendo a velocidade do firmware)` : text;

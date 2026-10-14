@@ -33,6 +33,7 @@ readonly USER_TMPFILES="/etc/tmpfiles.d/victus-thermal-user.conf"
 # config matching one of these was never edited and is safe to upgrade.
 readonly PRISTINE_CONFIGS=(
 	44a76bc7ac9e7e11e03d961a30a27f75242643c311219830b9863c097ea82649  # 1.0.0
+	369f85c558a918e99f0a52184a8594d365ece129d7a43a9b4cef498c8e8d31f3  # 1.1.0 - 1.3.0
 )
 KVER="$(uname -r)"
 readonly KVER

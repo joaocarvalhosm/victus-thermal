@@ -111,7 +111,17 @@ modo MAX.
 As curvas padrão começam em 0 %: em carga leve **o firmware HP manda**, no
 modo térmico do perfil escolhido, e a curva só assume quando esquenta de
 verdade, onde o firmware é tímido demais. Ao assumir, o serviço **nunca
-começa mais devagar do que o firmware estava girando**. Um arquivo inválido é
+começa mais devagar do que o firmware estava girando**.
+
+Para evitar o liga-desliga brusco do firmware em picos de temperatura:
+- **filtro de picos:** a temperatura é suavizada (~7 s) e a curva só assume
+  se o calor durar `engage_delay` (6 s). A emergência usa a leitura bruta;
+- **entrada suave:** a curva entra um pouco antes do limite do firmware, em
+  velocidade baixa;
+- **tempo mínimo:** depois de ligar, as ventoinhas ficam `hold_time` (90 s)
+  na velocidade baixa antes de devolver o controle ao firmware.
+
+Um arquivo inválido é
 recusado por inteiro (o motivo vai para `journalctl -u victus-thermal`) e
 os padrões continuam valendo.
 
