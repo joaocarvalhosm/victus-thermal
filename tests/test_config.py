@@ -33,6 +33,8 @@ class ParseTest(unittest.TestCase):
             {"curves": [1, 2]},                                 # not a table
             {"ac_quiet": "yes"},                                # not a bool
             {"ac_quiet_duty": 80},                              # not quiet
+            {"max_profiles": "performance"},                    # not a list
+            {"max_profiles": ["turbo"]},                        # unknown profile
         ]
         for doc in bad:
             with self.subTest(doc=doc), self.assertRaises(ValueError):

@@ -57,6 +57,10 @@ class Config:
     # GNOME extension) overrides it and the choice is remembered.
     ac_quiet: bool = True
     ac_quiet_duty: float = 15.0
+    # Platform profiles in which the user may force the fans to MAX. In any
+    # other profile a MAX request falls back to the curve, and switching to
+    # one of them ends a forced MAX. The emergency MAX ignores this.
+    max_profiles: tuple[str, ...] = ("performance",)
     # Two-state fallback (stock driver without manual pwm): force MAX when the
     # curve asks for at least this duty, release below it minus 15 %.
     twostate_max_duty: float = 70.0
@@ -81,12 +85,19 @@ def _bool(raw: dict, key: str, default: bool) -> bool:
     return value
 
 
+def _profiles(raw: dict, key: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    value = raw.get(key, list(default))
+    if not isinstance(value, list) or not all(v in PROFILES for v in value):
+        raise ValueError(f"{key} must be a list of: {', '.join(PROFILES)}")
+    return tuple(value)
+
+
 def parse(raw: dict) -> Config:
     """Build a Config from a parsed TOML document. Raises ValueError."""
     known = {
         "poll_interval", "emergency_temp", "emergency_release", "hysteresis",
         "smoothing", "hold_time", "engage_delay", "twostate_max_duty", "curves",
-        "ac_quiet", "ac_quiet_duty",
+        "ac_quiet", "ac_quiet_duty", "max_profiles",
     }
     unknown = set(raw) - known
     if unknown:
@@ -123,6 +134,7 @@ def parse(raw: dict) -> Config:
         engage_delay=_number(raw, "engage_delay", d.engage_delay, 0, 60),
         ac_quiet=_bool(raw, "ac_quiet", d.ac_quiet),
         ac_quiet_duty=_number(raw, "ac_quiet_duty", d.ac_quiet_duty, 1, 50),
+        max_profiles=_profiles(raw, "max_profiles", d.max_profiles),
         twostate_max_duty=_number(raw, "twostate_max_duty", d.twostate_max_duty, 20, 100),
         curves=curves,
     )

@@ -267,6 +267,12 @@ class VictusIndicator extends PanelMenu.Button {
 
         this._setChoices(this._profileItems, s.profile, true);
         this._setChoices(this._modeItems, s.mode, true);
+        // Forced MAX is only allowed in some profiles (Desempenho by default);
+        // the daemon refuses it elsewhere, so do not offer it.
+        const maxItem = this._modeItems.get('max');
+        const maxAllowed = s.max_allowed !== false;
+        maxItem.setSensitive(maxAllowed);
+        maxItem.label.text = maxAllowed ? 'Máximo' : 'Máximo (só no Desempenho)';
         // setToggleState does not emit 'toggled', so this cannot loop back
         this._acQuietItem.setToggleState(Boolean(s.ac_quiet?.enabled));
         this._acQuietItem.setSensitive(s.ac_quiet !== undefined);

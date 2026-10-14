@@ -81,7 +81,8 @@ de ventoinha junto. Também dá para usar a extensão ou o `victusctl`:
 ```bash
 victusctl status                 # temperaturas, RPM, decisão atual
 victusctl profile performance    # low-power | balanced | performance
-victusctl mode max               # curve | auto | max (volta a "curve" no reboot)
+victusctl mode max               # curve | auto | max (volta a "curve" no reboot;
+                                 # max só no perfil Desempenho)
 victusctl ac-quiet off           # silencioso contínuo na tomada: on | off
 ```
 
@@ -121,6 +122,12 @@ Para evitar o liga-desliga brusco do firmware em picos de temperatura:
   velocidade baixa;
 - **tempo mínimo:** depois de ligar, as ventoinhas ficam `hold_time` (90 s)
   na velocidade baixa antes de devolver o controle ao firmware.
+
+**Máximo só no Desempenho:** forçar as ventoinhas no máximo só é permitido no
+perfil Desempenho (`max_profiles` no `config.toml`). Em Economia ou
+Equilibrado o pedido é recusado, e trocar para um desses perfis volta o modo
+para Automático. A **emergência** (≥ 95 °C) continua indo ao máximo em
+qualquer perfil.
 
 **Silencioso contínuo na tomada** (ligado por padrão): com o carregador
 ligado, as ventoinhas nunca param. Ficam na menor rotação que elas suportam,

@@ -85,6 +85,11 @@ def _write_request(path: str, value: str) -> bool:
 
 
 def cmd_mode(args) -> int:
+    s = _status()
+    if args.mode == "max" and s is not None and s.get("max_allowed") is False:
+        print(f"max is only allowed in the performance profile (now: {s['profile']}); "
+              "switch with: victusctl profile performance", file=sys.stderr)
+        return 1
     if not _write_request(MODE_PATH, args.mode):
         return 1
     print(f"fan mode: {args.mode}")

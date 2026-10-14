@@ -177,6 +177,15 @@ class Daemon:
         r = self.hw.read()
         manual = self.hw.has_manual_pwm()
         mode = read_mode(self.mode_path)
+        max_allowed = r.profile in self.policy.cfg.max_profiles
+        if mode == MAX and not max_allowed:
+            # Forced MAX is for the performance profile: refuse it elsewhere
+            # and end it when the profile changes. Removing the request also
+            # updates every client (extension, victusctl).
+            log.info("fan mode max is not allowed in profile %s; back to curve", r.profile)
+            with contextlib.suppress(OSError):
+                os.unlink(self.mode_path)
+            mode = "curve"
         saved = read_ac_quiet(self.ac_quiet_path)
         ac_quiet = self.policy.cfg.ac_quiet if saved is None else saved
         d = self.policy.decide(r, mode, manual, ac_quiet=ac_quiet)
@@ -210,6 +219,7 @@ class Daemon:
             "version": __version__,
             "driver": "victus_s (manual pwm)" if manual else "stock (two-state)",
             "mode": mode,
+            "max_allowed": max_allowed,
             "profile": r.profile,
             "on_ac": r.on_ac,
             "temps": {"cpu": r.cpu, "igpu": r.igpu, "dgpu": r.dgpu, "dgpu_state": r.dgpu_state},

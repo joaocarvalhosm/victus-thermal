@@ -155,9 +155,57 @@ class DaemonTest(unittest.TestCase):
 
     def test_mode_override_file(self):
         fs, d = self.make()
+        fs.set("sys/firmware/acpi/platform_profile", "performance")
+        with open(fs.mode_file, "w") as f:
+            f.write("max\n")
+        status = d.step()
+        self.assertEqual(status["mode"], "max")
+        self.assertTrue(status["max_allowed"])
+        self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "0")
+
+    def test_max_refused_outside_performance(self):
+        for profile in ("balanced", "low-power"):
+            with self.subTest(profile=profile):
+                fs, d = self.make()
+                fs.set("sys/firmware/acpi/platform_profile", profile)
+                with open(fs.mode_file, "w") as f:
+                    f.write("max\n")
+                with self.assertLogs("victus-thermald", level="INFO") as logs:
+                    status = d.step()
+                self.assertEqual(status["mode"], "curve")
+                self.assertFalse(status["max_allowed"])
+                self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "2")
+                self.assertFalse(os.path.exists(fs.mode_file))   # clients see it
+                self.assertTrue(any("not allowed" in line for line in logs.output))
+
+    def test_leaving_performance_ends_forced_max(self):
+        fs, d = self.make()
+        fs.set("sys/firmware/acpi/platform_profile", "performance")
+        with open(fs.mode_file, "w") as f:
+            f.write("max\n")
+        d.step()
+        fs.set("sys/firmware/acpi/platform_profile", "balanced")
+        self.assertEqual(d.step()["mode"], "curve")
+        self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "2")
+
+    def test_firmware_mode_allowed_everywhere(self):
+        fs, d = self.make()
+        fs.set("sys/firmware/acpi/platform_profile", "low-power")
+        with open(fs.mode_file, "w") as f:
+            f.write("auto\n")
+        self.assertEqual(d.step()["mode"], "auto")
+
+    def test_max_profiles_is_configurable(self):
+        fs, d = self.make(config_text='max_profiles = ["balanced", "performance"]\n')
         with open(fs.mode_file, "w") as f:
             f.write("max\n")
         self.assertEqual(d.step()["mode"], "max")
+
+    def test_emergency_max_ignores_profile_limit(self):
+        fs, d = self.make()
+        fs.set("sys/firmware/acpi/platform_profile", "low-power")
+        fs.set("sys/class/hwmon/hwmon6/temp1_input", "97000")
+        self.assertEqual(d.step()["decision"]["kind"], "max")
         self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "0")
 
     def test_garbage_mode_file_means_curve(self):
@@ -219,6 +267,7 @@ class DaemonTest(unittest.TestCase):
 
     def test_mode_request_is_applied_without_waiting_for_poll(self):
         fs, d = self.make(config_text="poll_interval = 10\n")
+        fs.set("sys/firmware/acpi/platform_profile", "performance")
         steps = []
         real_step = d.step
 

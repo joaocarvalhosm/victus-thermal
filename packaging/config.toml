@@ -39,6 +39,11 @@ engage_delay = 6.0
 ac_quiet = true
 ac_quiet_duty = 15.0
 
+# Profiles in which the fans may be forced to MAX (extension / victusctl).
+# Elsewhere a MAX request falls back to the automatic curve, and switching
+# to another profile ends a forced MAX. The emergency MAX is never limited.
+max_profiles = ["performance"]
+
 # Only used with the stock driver (fans limited to AUTO/MAX): switch to MAX
 # when the curve asks for at least this duty, back to AUTO 15 % below it.
 twostate_max_duty = 70.0
