@@ -10,6 +10,7 @@ from __future__ import annotations
 import glob
 import os
 import subprocess
+import time
 from dataclasses import dataclass
 
 # hp-wmi pwm1_enable values (drivers/platform/x86/hp/hp-wmi.c)
@@ -19,6 +20,18 @@ PWM_AUTO = 2
 
 NVIDIA_VENDOR = "0x10de"
 NVIDIA_SMI_TIMEOUT = 2.0
+
+# Each fanN_input read is a BIOS WMI call of ~300 ms that holds the ACPI
+# interpreter, so RPM (display only, not used for control) is cached.
+RPM_INTERVAL = 10.0
+
+# Every nvidia-smi query counts as GPU activity and restarts the driver's
+# idle timer before runtime suspend. Do not query a dGPU that just woke up
+# (it is probably going back to sleep), and when it is awake but idle query
+# rarely, so the daemon itself never keeps the dGPU powered.
+DGPU_WAKE_GRACE = 10.0
+DGPU_BUSY_INTERVAL = 5.0
+DGPU_IDLE_INTERVAL = 30.0
 
 
 @dataclass(frozen=True)
@@ -53,14 +66,53 @@ def _milli(value: int | None) -> float | None:
     return None if value is None else round(value / 1000, 1)
 
 
+class DgpuSampler:
+    """Decides when the NVIDIA temperature may be queried (see the
+    DGPU_* constants) and remembers the last answer."""
+
+    def __init__(self, query, clock=time.monotonic):
+        self._query = query          # () -> (temp, utilization) or None
+        self._clock = clock
+        self._active_since: float | None = None
+        self._last_query: float | None = None
+        self._temp: float | None = None
+        self._busy = False
+
+    def sample(self, runtime_status: str | None) -> tuple[float | None, str]:
+        now = self._clock()
+        if runtime_status != "active":
+            self._active_since = self._last_query = self._temp = None
+            self._busy = False
+            return None, "suspended"
+        if self._active_since is None:
+            self._active_since = now
+        if now - self._active_since < DGPU_WAKE_GRACE:
+            return None, "waking"
+        interval = DGPU_BUSY_INTERVAL if self._busy else DGPU_IDLE_INTERVAL
+        if self._last_query is None or now - self._last_query >= interval:
+            self._last_query = now
+            result = self._query()
+            if result is None:
+                self._temp, self._busy = None, False
+            else:
+                self._temp, utilization = result
+                self._busy = utilization > 0
+        return self._temp, "active"
+
+
 class Hardware:
-    def __init__(self, root: str = "/", nvidia_smi: str = "nvidia-smi"):
+    def __init__(self, root: str = "/", nvidia_smi: str = "nvidia-smi",
+                 clock=time.monotonic):
         self.root = root
         self.nvidia_smi = nvidia_smi
+        self._clock = clock
         self._hp: str | None = None
         self._cpu: str | None = None
         self._igpu: str | None = None
         self._nvidia: str | None = None
+        self._dgpu_sampler = DgpuSampler(self._query_nvidia, clock)
+        self._rpm: tuple[int | None, int | None] = (None, None)
+        self._rpm_at: float | None = None
 
     def _p(self, *parts: str) -> str:
         return os.path.join(self.root, *parts)
@@ -114,23 +166,40 @@ class Hardware:
 
     # -- readers --
 
+    def _query_nvidia(self) -> tuple[float, float] | None:
+        try:
+            out = subprocess.run(
+                [self.nvidia_smi, "--query-gpu=temperature.gpu,utilization.gpu",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=NVIDIA_SMI_TIMEOUT, check=False,
+            )
+            temp, util = (float(v) for v in out.stdout.splitlines()[0].split(","))
+            return temp, util
+        except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+            return None
+
     def _dgpu(self) -> tuple[float | None, str]:
-        """Read the NVIDIA temperature without waking a runtime-suspended
-        dGPU: nvidia-smi is only run when the device is already active."""
+        """Never wakes a runtime-suspended dGPU, and never keeps one awake:
+        see DgpuSampler."""
         dev = self._nvidia_dev()
         if dev is None:
             return None, "absent"
-        status = _read(os.path.join(dev, "power", "runtime_status"))
-        if status != "active":
-            return None, "suspended"
-        try:
-            out = subprocess.run(
-                [self.nvidia_smi, "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=NVIDIA_SMI_TIMEOUT, check=False,
-            )
-            return float(out.stdout.split()[0]), "active"
-        except (OSError, subprocess.SubprocessError, ValueError, IndexError):
-            return None, "active"
+        return self._dgpu_sampler.sample(_read(os.path.join(dev, "power", "runtime_status")))
+
+    def _fans(self, hp: str | None) -> tuple[int | None, int | None]:
+        now = self._clock()
+        if hp is None:
+            return None, None
+        if self._rpm_at is None or now - self._rpm_at >= RPM_INTERVAL:
+            self._rpm = (_read_int(os.path.join(hp, "fan1_input")),
+                         _read_int(os.path.join(hp, "fan2_input")))
+            self._rpm_at = now
+        return self._rpm
+
+    def refresh_rpm_soon(self, delay: float = 3.0) -> None:
+        """Re-read RPM `delay` seconds from now (after a mode change, once the
+        fans have had time to react) instead of at the next regular slot."""
+        self._rpm_at = self._clock() - RPM_INTERVAL + delay
 
     def _on_ac(self) -> bool | None:
         states = [
@@ -153,10 +222,7 @@ class Hardware:
             dgpu_state=dgpu_state,
             profile=self.profile(),
             on_ac=self._on_ac(),
-            rpm=(
-                _read_int(os.path.join(hp, "fan1_input")) if hp else None,
-                _read_int(os.path.join(hp, "fan2_input")) if hp else None,
-            ),
+            rpm=self._fans(hp),
             pwm_mode=_read_int(os.path.join(hp, "pwm1_enable")) if hp else None,
         )
 

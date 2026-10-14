@@ -177,6 +177,8 @@ class Daemon:
         log_key = (d.kind, mode, r.profile, self.policy.state.emergency)
         if log_key != self._last_log_key:
             log.info("%s", d.reason)
+            if self._last_log_key is not None:
+                self.hw.refresh_rpm_soon()  # show the effect of the change
             self._last_log_key = log_key
 
         return {

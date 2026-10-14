@@ -145,6 +145,24 @@ sudo tools/catch-workqueue-warning.sh report   # mostra a função culpada
 
 Se o culpado for o Wi-Fi (`rtw89_*`), aplique `extras/rtw89-stability.conf`.
 
+## NVIDIA só sob demanda (opcional)
+
+Por padrão, qualquer app Vulkan (inclusive apps GTK4, como o terminal) carrega
+o driver da NVIDIA ao abrir, e isso mantém a RTX ligada (~2 W) mesmo sem uso.
+`extras/gpu-on-demand/install.sh` (sem sudo, vale a partir do próximo login):
+
+- faz os apps usarem a AMD integrada por padrão, para a NVIDIA poder desligar;
+- marca Steam, Lutris, Heroic, Bottles e TLauncher para abrirem **na NVIDIA**
+  (`PrefersNonDefaultGPU`). O GNOME aplica o ambiente do switcheroo-control, e
+  os jogos herdam isso e rodam na RTX;
+- qualquer outro app: clique direito no ícone → *Iniciar usando placa de vídeo
+  dedicada*.
+
+Desfazer: `extras/gpu-on-demand/install.sh --uninstall`. Para ver em tempo
+real quando a NVIDIA está em uso: `nvtop`, ou
+`cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status` (`suspended` =
+desligada).
+
 ## Desinstalar
 
 ```bash
