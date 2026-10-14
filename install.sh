@@ -42,8 +42,16 @@ require_root() {
 	[[ ${EUID} -eq 0 ]] || die "run with sudo: sudo $0 $*"
 }
 
+# Note: commands are captured and matched instead of piped into grep -q.
+# Under pipefail a pipeline fails if the left side exits non-zero, and
+# `mokutil --test-key` exits 1 even when it reports "already enrolled".
+
 secure_boot_on() {
-	mokutil --sb-state 2>/dev/null | grep -q "SecureBoot enabled"
+	[[ $(mokutil --sb-state 2>/dev/null) == *"SecureBoot enabled"* ]]
+}
+
+mok_enrolled() {
+	[[ -r ${MOK_DER} && $(mokutil --test-key "${MOK_DER}" 2>&1) == *"already enrolled"* ]]
 }
 
 hp_hwmon() {
@@ -81,7 +89,7 @@ cmd_check() {
 	ok "python $(python3 -V | cut -d' ' -f2)"
 
 	if secure_boot_on; then
-		if [[ -r ${MOK_DER} ]] && mokutil --test-key "${MOK_DER}" 2>&1 | grep -q "already enrolled"; then
+		if mok_enrolled; then
 			ok "Secure Boot on, signing key enrolled"
 		else
 			warn "Secure Boot on, signing key not enrolled yet (run: sudo $0 mok)"
@@ -114,7 +122,7 @@ cmd_mok() {
 		info "creating module signing key in ${MOK_DIR}"
 		update-secureboot-policy --new-key
 	fi
-	if mokutil --test-key "${MOK_DER}" 2>&1 | grep -q "already enrolled"; then
+	if mok_enrolled; then
 		ok "signing key enrolled"
 		return 0
 	fi
@@ -157,7 +165,7 @@ restore_stock_driver() {
 
 cmd_driver_test() {
 	cmd_check >/dev/null
-	if secure_boot_on && ! mokutil --test-key "${MOK_DER}" 2>&1 | grep -q "already enrolled"; then
+	if secure_boot_on && ! mok_enrolled; then
 		die "signing key not enrolled; run: sudo $0 mok"
 	fi
 
@@ -213,7 +221,7 @@ cmd_driver_install() {
 	cmd_check >/dev/null
 	local src="/usr/src/${DKMS_NAME}-${DKMS_VERSION}"
 	info "installing ${DKMS_NAME} ${DKMS_VERSION} with DKMS"
-	if dkms status -m "${DKMS_NAME}" -v "${DKMS_VERSION}" 2>/dev/null | grep -q .; then
+	if [[ -n $(dkms status -m "${DKMS_NAME}" -v "${DKMS_VERSION}" 2>/dev/null) ]]; then
 		dkms remove -m "${DKMS_NAME}" -v "${DKMS_VERSION}" --all >/dev/null
 	fi
 	rm -rf "${src}"
@@ -249,7 +257,7 @@ cmd_daemon() {
 	local user="${SUDO_USER:-}"
 
 	for svc in victus-fan.service victus-backend.service; do
-		if systemctl list-unit-files "${svc}" 2>/dev/null | grep -q "${svc}"; then
+		if [[ $(systemctl list-unit-files "${svc}" 2>/dev/null) == *"${svc}"* ]]; then
 			warn "disabling ${svc}: it drives the same fan control"
 			systemctl disable --now "${svc}" || true
 		fi

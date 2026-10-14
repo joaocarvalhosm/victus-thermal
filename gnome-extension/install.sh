@@ -41,6 +41,6 @@ else
 	echo "log out and back in; the indicator then appears in the top bar."
 fi
 
-if ! id -nG | grep -qw victus-thermal; then
+if [[ " $(id -nG) " != *" victus-thermal "* ]]; then
 	echo "note: changing the fan mode needs the 'victus-thermal' group (sudo ./install.sh daemon adds it; then log in again)."
 fi

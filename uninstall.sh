@@ -19,7 +19,7 @@ purge=0
 [[ ${1:-} == --purge ]] && purge=1
 
 echo "==> stopping service"
-if systemctl list-unit-files victus-thermal.service 2>/dev/null | grep -q victus-thermal; then
+if [[ $(systemctl list-unit-files victus-thermal.service 2>/dev/null) == *victus-thermal* ]]; then
 	systemctl disable --now victus-thermal.service || true
 fi
 for f in /sys/devices/platform/hp-wmi/hwmon/hwmon*/pwm1_enable; do
@@ -33,7 +33,7 @@ rm -rf /usr/lib/victus-thermal /usr/share/doc/victus-thermal /run/victus-thermal
 systemctl daemon-reload
 
 echo "==> removing driver"
-if command -v dkms >/dev/null && dkms status -m "${DKMS_NAME}" 2>/dev/null | grep -q .; then
+if command -v dkms >/dev/null && [[ -n $(dkms status -m "${DKMS_NAME}" 2>/dev/null) ]]; then
 	for v in $(dkms status -m "${DKMS_NAME}" | sed -n 's|^[^/]*/\([^,:]*\).*|\1|p' | sort -u); do
 		dkms remove -m "${DKMS_NAME}" -v "${v}" --all
 		rm -rf "/usr/src/${DKMS_NAME}-${v}"
