@@ -176,6 +176,12 @@ cmd_driver_test() {
 
 	info "swapping in the patched driver (temporary: a reboot restores the stock one)"
 	modprobe -r hp_wmi 2>/dev/null || rmmod hp_wmi 2>/dev/null || true
+	# modprobe -r also unloads dependencies left unused (sparse-keymap), and
+	# insmod does not resolve dependencies, so load the declared ones first.
+	local dep
+	for dep in $(modinfo -F depends "${ko}" | tr ',' ' '); do
+		modprobe "${dep}" || die "cannot load dependency ${dep}"
+	done
 	local since
 	since="$(date '+%Y-%m-%d %H:%M:%S')"
 	if ! insmod "${ko}"; then
