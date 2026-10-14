@@ -1,0 +1,110 @@
+"""Fan decision logic. Pure: takes readings and state, returns a decision.
+
+Order of precedence, highest first:
+  1. Emergency: any sensor >= emergency_temp forces MAX until every sensor is
+     back at or below emergency_release. Overrides everything, user too.
+  2. User override ("auto" / "max") from victusctl.
+  3. Missing CPU sensor: hand control to the firmware, never guess.
+  4. The active platform profile's curve, fed by the hottest sensor
+     (smoothed, then hysteresis on the way down).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from .config import FIRMWARE, Config
+from .curve import Ema, Hysteresis, duty_to_pwm
+from .hw import Readings
+
+AUTO, MAX, MANUAL = "auto", "max", "manual"
+MODES = ("curve", AUTO, MAX)
+
+TWOSTATE_RELEASE_GAP = 15.0
+
+
+@dataclass(frozen=True)
+class Decision:
+    kind: str
+    pwm: int | None
+    reason: str
+    duty: float | None = None
+    curve_temp: float | None = None
+
+
+@dataclass
+class PolicyState:
+    smoothing: Ema
+    hysteresis: Hysteresis
+    emergency: bool = False
+    twostate_max: bool = False
+
+    @classmethod
+    def for_config(cls, cfg: Config) -> PolicyState:
+        return cls(Ema(cfg.smoothing), Hysteresis(cfg.hysteresis))
+
+
+@dataclass
+class Policy:
+    cfg: Config
+    state: PolicyState = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.state = PolicyState.for_config(self.cfg)
+
+    def reconfigure(self, cfg: Config) -> None:
+        if cfg != self.cfg:
+            self.cfg = cfg
+            emergency = self.state.emergency
+            self.state = PolicyState.for_config(cfg)
+            self.state.emergency = emergency
+
+    def _sensors(self, r: Readings) -> dict[str, float]:
+        return {k: v for k, v in (("cpu", r.cpu), ("igpu", r.igpu), ("dgpu", r.dgpu))
+                if v is not None}
+
+    def decide(self, r: Readings, mode: str, manual_supported: bool) -> Decision:
+        cfg, st = self.cfg, self.state
+        sensors = self._sensors(r)
+
+        if sensors and max(sensors.values()) >= cfg.emergency_temp:
+            st.emergency = True
+        elif st.emergency and (not sensors or max(sensors.values()) <= cfg.emergency_release):
+            st.emergency = False
+        if st.emergency:
+            hot = max(sensors, key=sensors.get) if sensors else "?"
+            return Decision(MAX, None, f"emergency: {hot} {sensors.get(hot)}C")
+
+        if mode == AUTO:
+            return Decision(AUTO, None, "override: firmware control")
+        if mode == MAX:
+            return Decision(MAX, None, "override: max")
+
+        if r.cpu is None:
+            st.smoothing.reset()
+            st.hysteresis.reset()
+            return Decision(AUTO, None, "cpu sensor unavailable: firmware control")
+
+        profile = r.profile if r.profile in cfg.curves else "balanced"
+        curve = cfg.curves[profile]
+        if curve == FIRMWARE:
+            return Decision(AUTO, None, f"{profile}: firmware curve")
+
+        temp = st.hysteresis.update(st.smoothing.update(max(sensors.values())))
+        duty = curve.duty(temp)
+
+        if not manual_supported:
+            if duty >= cfg.twostate_max_duty:
+                st.twostate_max = True
+            elif duty < cfg.twostate_max_duty - TWOSTATE_RELEASE_GAP:
+                st.twostate_max = False
+            kind = MAX if st.twostate_max else AUTO
+            return Decision(kind, None, f"{profile} (two-state): {duty:.0f}% at {temp:.1f}C",
+                            duty, temp)
+
+        if duty <= 0:
+            return Decision(AUTO, None, f"{profile}: below curve at {temp:.1f}C", duty, temp)
+        if duty >= 100:
+            return Decision(MAX, None, f"{profile}: curve max at {temp:.1f}C", duty, temp)
+        return Decision(MANUAL, duty_to_pwm(duty), f"{profile}: {duty:.0f}% at {temp:.1f}C",
+                        duty, temp)
