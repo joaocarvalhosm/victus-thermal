@@ -1,0 +1,34 @@
+# /etc/victus-thermal/config.toml
+#
+# Changes are picked up automatically within one poll interval.
+# An invalid file is rejected as a whole (the reason is logged to the journal:
+# `journalctl -u victus-thermal`) and the built-in defaults below are used.
+
+# Seconds between control steps (0.5 - 10).
+poll_interval = 2.0
+
+# Any sensor (CPU, iGPU or NVIDIA GPU) at or above emergency_temp forces the
+# fans to MAX, overriding every other setting, until all sensors are back at
+# or below emergency_release.
+emergency_temp = 95.0
+emergency_release = 85.0
+
+# Degrees the temperature must fall before the fans slow down again.
+hysteresis = 4.0
+
+# Smoothing of the temperature input (0.05 = very smooth, 1 = raw).
+smoothing = 0.5
+
+# Only used with the stock driver (fans limited to AUTO/MAX): switch to MAX
+# when the curve asks for at least this duty, back to AUTO 15 % below it.
+twostate_max_duty = 70.0
+
+# One curve per platform profile, chosen in GNOME's power menu or with
+# `victusctl profile`. Points are [temperature degC, fan duty %]; the input is
+# the hottest sensor. 0 % means "leave it to the firmware" (lets the fans
+# stop when idle), 100 % means MAX. Write "firmware" instead of a curve to
+# leave a profile entirely to HP's own fan curve.
+[curves]
+low-power   = [[60, 0], [70, 30], [80, 55], [90, 80], [95, 100]]
+balanced    = [[55, 0], [60, 30], [70, 45], [80, 70], [88, 100]]
+performance = [[45, 35], [60, 50], [70, 70], [80, 90], [85, 100]]

@@ -1,0 +1,8 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Hand the fans back to the HP firmware curve (pwm1_enable=2). Globs the
+# hwmon node because its number changes across boots. Always exits 0.
+for f in /sys/devices/platform/hp-wmi/hwmon/hwmon*/pwm1_enable; do
+	[ -w "$f" ] && echo 2 > "$f"
+done
+exit 0

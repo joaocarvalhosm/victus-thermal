@@ -1,0 +1,4 @@
+# /run/victus-thermal: status, root only.
+# /run/victus-thermal/control: mode requests from the victus-thermal group.
+d /run/victus-thermal         0755 root root           -
+d /run/victus-thermal/control 2770 root victus-thermal -
