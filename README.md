@@ -10,7 +10,7 @@ Secure Boot ligado.
 |---|---|
 | **Notebook** | HP Victus 15-fb2xxx, placa **8C2F** (Ryzen 5 8645HS + RTX 4050) |
 | **Sistema** | Ubuntu 26.04, kernel 7.0.x, GNOME 50 (Wayland), Secure Boot ligado |
-| **Versão** | 1.6.0, veja o [CHANGELOG](CHANGELOG.md) |
+| **Versão** | 1.7.0, veja o [CHANGELOG](CHANGELOG.md) |
 
 ---
 
@@ -58,6 +58,8 @@ Este projeto corrige isso na raiz e acrescenta o que o OMEN fazia.
   qualquer modo.
 - 🖥️ **Indicador na barra do GNOME:** temperatura, RPM e controles, com
   atualização instantânea.
+- ⌨️ **Luz do teclado:** apaga com a tela e, opcionalmente, depois de um
+  tempo sem uso, com um botão nas configurações rápidas do GNOME.
 - 🎮 **NVIDIA só sob demanda:** a RTX desliga quando ninguém usa, e os jogos
   continuam abrindo nela.
 - 🔐 **Secure Boot ligado:** o driver é assinado com a sua chave (MOK) e
@@ -132,6 +134,21 @@ ventoinha correspondente.
  │     ✓ Automático (recomendado) · Somente firmware HP · Máximo
  └─ [x] Silencioso contínuo na tomada
 ```
+
+### Luz do teclado
+
+Nas **configurações rápidas** do GNOME (canto superior direito) aparece o
+botão **Luz do teclado**:
+
+- **ligado:** a luz apaga depois do tempo escolhido sem usar teclado e mouse
+  (seta ao lado: 30 s, 1 min, 2 min ou 5 min) e acende assim que você volta;
+- **desligado:** a luz fica como você deixou.
+
+Ela também apaga sozinha quando a tela apaga, ao fechar a tampa e ao
+suspender (isso é do próprio GNOME). Se você apagar a luz pelo atalho Fn, ela
+nunca é acesa de volta automaticamente.
+
+### Modos das ventoinhas
 
 | Modo das ventoinhas | Quando usar |
 |---|---|
@@ -282,6 +299,15 @@ permissão na hora, sem precisar sair da sessão.
 </details>
 
 <details>
+<summary><b>O botão "Luz do teclado" não aparece</b></summary>
+
+Ele só aparece quando o driver expõe a luz. Confira com
+`ls /sys/class/leds/` (deve existir `hp::kbd_backlight`) e
+`journalctl -k | grep "keyboard backlight"`. Depois de instalar o driver,
+saia e entre de novo na sessão.
+</details>
+
+<details>
 <summary><b>O driver não carregou depois de atualizar o kernel</b></summary>
 
 O driver só é compilado para o kernel 7.0.x. Em outra série, o driver original
@@ -323,7 +349,7 @@ victus-thermal/
 │   ├── config.py      leitura e validação do config.toml
 │   ├── curve.py       curva, histerese, suavização
 │   └── cli.py         victusctl
-├── gnome-extension/   indicador da barra do GNOME
+├── gnome-extension/   indicador da barra (thermalIndicator.js) e luz do teclado (keyboardLight.js)
 ├── packaging/         unidade systemd, tmpfiles, config padrão
 ├── extras/            NVIDIA sob demanda, Wi-Fi rtw89
 ├── tools/             diagnóstico de congelamentos

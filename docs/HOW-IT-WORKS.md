@@ -31,6 +31,15 @@ WMI que a BIOS implementa e valida. Com isso o driver ganha:
 | Limites de potência da CPU | voltam ao padrão quando muda a fonte de energia |
 | RPM das ventoinhas | `fan1_input`, `fan2_input` |
 | Controle manual | `pwm1_enable` (0 = máximo, 1 = manual, 2 = firmware) e `pwm1` |
+| Luz do teclado¹ | LED `hp::kbd_backlight` (0/1), via UPower para o GNOME |
+
+¹ Acréscimo local, ainda não enviado ao kernel oficial. Usa o comando WMI
+`0x20009` do OMEN: subcomando 4 lê o registrador de brilho do teclado no EC,
+5 grava e manda o EC aplicar (bit 7 = aceso; `0x64` apaga, `0xE4` acende),
+conforme os métodos `LM04`/`LM05` da DSDT da 8C2F. O evento `0x0D` (atalho Fn)
+vira `brightness_hw_changed` para o UPower. Só é registrado em placas
+`victus_s`, e só se a leitura funcionar; a resposta da BIOS vai para o log
+(`keyboard backlight: caps … state …`).
 
 O firmware reverte o modo manual depois de 120 s; o próprio driver reenvia o
 comando a cada 90 s (*keep-alive*).
@@ -127,7 +136,17 @@ rename atômico), então atualiza ~1–3 ms depois de cada decisão. Um timer de
 5 s só serve para detectar um serviço parado. As ações chamam `victusctl`; a
 extensão não tem nenhum privilégio.
 
-## 5. NVIDIA sob demanda
+## 5. Luz do teclado na extensão
+
+`keyboardLight.js` fala com o UPower (`org.freedesktop.UPower.KbdBacklight`)
+e usa o monitor de inatividade do Mutter: depois de `kbd-auto-off-seconds`
+sem entrada, apaga a luz se ela estiver acesa e guarda o nível; na primeira
+entrada, acende de novo 0,4 s depois. O atraso garante que essa ação venha
+depois da restauração que o próprio GNOME faz ao acordar a tela. Uma luz
+apagada pelo usuário nunca é acesa. As preferências ficam em GSettings
+(`org.gnome.shell.extensions.victus-thermal`).
+
+## 6. NVIDIA sob demanda
 
 O loader Vulkan carrega **todos** os drivers instalados quando qualquer app
 Vulkan abre, e o driver NVIDIA abre a GPU ao carregar (medido: 15 aberturas de

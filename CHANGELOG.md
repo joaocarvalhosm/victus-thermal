@@ -2,6 +2,20 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [1.7.0] - 2026-10-14
+### Adicionado
+- **Luz do teclado:** o driver (DKMS 1.1.0) expõe `hp::kbd_backlight`
+  (liga/desliga) pela interface de iluminação do OMEN (WMI `0x20009`),
+  confirmada nas tabelas ACPI da 8C2F. O GNOME passa a apagar a luz quando a
+  tela apaga, e o atalho Fn é repassado a ele.
+- Botão **Luz do teclado** nas configurações rápidas do GNOME: apaga a luz
+  depois de 30 s / 1 min / 2 min / 5 min sem uso e acende ao voltar. Nunca
+  acende uma luz que você apagou manualmente.
+### Alterado
+- `install.sh all` atualiza o driver quando a versão do DKMS muda (antes
+  pulava qualquer driver já instalado) e reinicia o UPower.
+- Extensão dividida em módulos (`thermalIndicator.js`, `keyboardLight.js`).
+
 ## [1.6.0] - 2026-10-13
 ### Alterado
 - Modo **Máximo** só é permitido no perfil Desempenho (configurável com

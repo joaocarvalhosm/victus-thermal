@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.victus-thermal"
+          path="/org/gnome/shell/extensions/victus-thermal/">
+    <key name="kbd-auto-off" type="b">
+      <default>true</default>
+      <summary>Turn the keyboard light off after inactivity</summary>
+    </key>
+    <key name="kbd-auto-off-seconds" type="u">
+      <range min="10" max="3600"/>
+      <default>60</default>
+      <summary>Seconds without keyboard or mouse input before the light turns off</summary>
+    </key>
+  </schema>
+</schemalist>

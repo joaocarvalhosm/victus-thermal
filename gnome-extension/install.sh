@@ -25,9 +25,11 @@ if [[ ${1:-} == --uninstall ]]; then
 fi
 
 rm -rf "${DEST}"
-install -d "${DEST}/icons"
-install -m 0644 "${HERE}/${UUID}"/{metadata.json,extension.js,stylesheet.css} "${DEST}/"
+install -d "${DEST}/icons" "${DEST}/schemas"
+install -m 0644 "${HERE}/${UUID}"/{metadata.json,stylesheet.css} "${HERE}/${UUID}"/*.js "${DEST}/"
 install -m 0644 "${HERE}/${UUID}/icons/victus-fan-symbolic.svg" "${DEST}/icons/"
+install -m 0644 "${HERE}/${UUID}"/schemas/*.gschema.xml "${DEST}/schemas/"
+glib-compile-schemas --strict "${DEST}/schemas"
 echo "installed to ${DEST}"
 
 if gnome-extensions info "${UUID}" >/dev/null 2>&1; then

@@ -1,8 +1,11 @@
 {
   "uuid": "victus-thermal@joaocarvalhosm.github.io",
   "name": "Victus Thermal",
-  "description": "Temperaturas, ventoinhas e perfil térmico do HP Victus na barra superior. Requer o serviço victus-thermal.",
-  "shell-version": ["50"],
+  "description": "Temperaturas, ventoinhas, perfil térmico e luz do teclado do HP Victus. Requer o serviço victus-thermal.",
+  "shell-version": [
+    "50"
+  ],
   "url": "https://github.com/joaocarvalhosm/victus-thermal",
-  "version-name": "1.6.0"
+  "version-name": "1.7.0",
+  "settings-schema": "org.gnome.shell.extensions.victus-thermal"
 }
