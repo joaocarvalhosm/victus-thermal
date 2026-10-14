@@ -358,7 +358,10 @@ cmd_daemon() {
 	[[ -e ${USER_TMPFILES} ]] && tmpfiles+=("${USER_TMPFILES}")
 	systemd-tmpfiles --create "${tmpfiles[@]}"
 	if [[ -n ${user} && ${user} != root ]]; then
-		if runuser -u "${user}" -- test -w /run/victus-thermal/control; then
+		# bash's [[ -w ]] asks the kernel (access(2)), which honours ACLs; the
+		# uutils /usr/bin/test shipped by Ubuntu 26.04 does not.
+		# shellcheck disable=SC2016  # $1 is expanded by the inner bash
+		if runuser -u "${user}" -- bash -c '[[ -w $1 ]]' _ /run/victus-thermal/control; then
 			ok "${user} can change the fan mode now (no re-login needed)"
 		else
 			warn "${user} cannot write the fan mode yet; log out and back in"
