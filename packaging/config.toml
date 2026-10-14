@@ -31,6 +31,14 @@ hold_time = 90.0
 # at once, and the emergency check is always immediate.
 engage_delay = 6.0
 
+# On AC power keep the fans turning at a quiet minimum (the driver raises it
+# to the lowest speed the fans support) instead of letting them stop; the
+# curve takes over above it. Keeps the chassis and the charging battery
+# cooler. Nothing changes on battery. `victusctl ac-quiet on|off` or the
+# GNOME extension overrides ac_quiet, and that choice is remembered.
+ac_quiet = true
+ac_quiet_duty = 15.0
+
 # Only used with the stock driver (fans limited to AUTO/MAX): switch to MAX
 # when the curve asks for at least this duty, back to AUTO 15 % below it.
 twostate_max_duty = 70.0

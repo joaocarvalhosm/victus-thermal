@@ -55,7 +55,7 @@ fi
 
 if (( purge )); then
 	echo "==> purging configuration"
-	rm -rf /etc/victus-thermal
+	rm -rf /etc/victus-thermal /var/lib/victus-thermal
 	getent group victus-thermal >/dev/null && groupdel victus-thermal
 fi
 

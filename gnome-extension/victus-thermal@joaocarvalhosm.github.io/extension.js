@@ -52,6 +52,8 @@ function describeDecision(s) {
     const d = s.decision;
     if (s.emergency)
         return 'EMERGÊNCIA: ventoinhas no máximo até esfriar';
+    if (d.kind === 'manual' && d.reason.includes('AC quiet'))
+        return `Silencioso na tomada: ${Math.round(d.duty)}% (curva assume se esquentar)`;
     if (d.kind === 'manual' && d.hold_remaining) {
         return `Suavizando: ${Math.round(d.duty)}% por mais ` +
             `${Math.ceil(d.hold_remaining)} s antes de voltar ao firmware`;
@@ -149,6 +151,12 @@ class VictusIndicator extends PanelMenu.Button {
             key => this._choose(this._profileItems, key, ['victusctl', 'profile', key]));
         this._modeItems = this._choiceSection('Ventoinhas', FAN_MODES,
             key => this._choose(this._modeItems, key, ['victusctl', 'mode', key]));
+
+        this._acQuietItem = new PopupMenu.PopupSwitchMenuItem(
+            'Silencioso contínuo na tomada', false);
+        this._acQuietItem.connect('toggled', (_item, state) =>
+            this._run(['victusctl', 'ac-quiet', state ? 'on' : 'off']));
+        this.menu.addMenuItem(this._acQuietItem);
     }
 
     _choose(items, key, argv) {
@@ -234,6 +242,7 @@ class VictusIndicator extends PanelMenu.Button {
             this._reasonItem.label.text = '';
             this._setChoices(this._profileItems, null, false);
             this._setChoices(this._modeItems, null, false);
+            this._acQuietItem.setSensitive(false);
             return;
         }
 
@@ -258,6 +267,9 @@ class VictusIndicator extends PanelMenu.Button {
 
         this._setChoices(this._profileItems, s.profile, true);
         this._setChoices(this._modeItems, s.mode, true);
+        // setToggleState does not emit 'toggled', so this cannot loop back
+        this._acQuietItem.setToggleState(Boolean(s.ac_quiet?.enabled));
+        this._acQuietItem.setSensitive(s.ac_quiet !== undefined);
     }
 
     destroy() {

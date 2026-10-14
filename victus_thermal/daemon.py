@@ -31,6 +31,10 @@ RUNTIME_DIR = "/run/victus-thermal"
 CONTROL_DIR = os.path.join(RUNTIME_DIR, "control")
 STATUS_PATH = os.path.join(RUNTIME_DIR, "status.json")
 MODE_PATH = os.path.join(CONTROL_DIR, "mode")
+# Persistent user preferences (survive reboots). Same trust model as
+# CONTROL_DIR: written by the victus-thermal group, only read by the daemon.
+STATE_DIR = "/var/lib/victus-thermal"
+AC_QUIET_PATH = os.path.join(STATE_DIR, "ac-quiet")
 
 # Skip pwm writes smaller than this: each one is a WMI round-trip and the
 # difference is inaudible.
@@ -68,29 +72,47 @@ def atomic_write(path: str, data: str, mode: int = 0o644) -> None:
         raise
 
 
-def read_mode(path: str = MODE_PATH) -> str:
+def read_keyword(path: str) -> str | None:
     """Untrusted input (group-writable): never follow links, read a few
-    bytes, accept only a known keyword."""
+    bytes. Callers accept only known keywords."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
-        return "curve"
+        return None
     try:
-        value = os.read(fd, 16).decode("ascii", "replace").strip()
+        return os.read(fd, 16).decode("ascii", "replace").strip()
     except OSError:
-        return "curve"
+        return None
     finally:
         os.close(fd)
+
+
+def read_mode(path: str = MODE_PATH) -> str:
+    value = read_keyword(path)
     return value if value in MODES else "curve"
+
+
+def read_ac_quiet(path: str = AC_QUIET_PATH) -> bool | None:
+    """The saved preference, or None when unset (use the config default)."""
+    return {"on": True, "off": False}.get(read_keyword(path) or "")
+
+
+def _stamp(path: str) -> tuple | None:
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return None
+    return st.st_ino, st.st_mtime_ns
 
 
 class Daemon:
     def __init__(self, hw: Hardware, config_path: str = config.CONFIG_PATH,
-                 runtime_dir: str = RUNTIME_DIR):
+                 runtime_dir: str = RUNTIME_DIR, state_dir: str = STATE_DIR):
         self.hw = hw
         self.config_path = config_path
         self.status_path = os.path.join(runtime_dir, "status.json")
         self.mode_path = os.path.join(runtime_dir, "control", "mode")
+        self.ac_quiet_path = os.path.join(state_dir, "ac-quiet")
         self.running = True
         self._config_mtime: float | None = None
         cfg = self._load_config(force=True)
@@ -155,7 +177,9 @@ class Daemon:
         r = self.hw.read()
         manual = self.hw.has_manual_pwm()
         mode = read_mode(self.mode_path)
-        d = self.policy.decide(r, mode, manual)
+        saved = read_ac_quiet(self.ac_quiet_path)
+        ac_quiet = self.policy.cfg.ac_quiet if saved is None else saved
+        d = self.policy.decide(r, mode, manual, ac_quiet=ac_quiet)
 
         error = None
         applied = None
@@ -194,19 +218,17 @@ class Daemon:
                          "curve_temp": d.curve_temp, "reason": d.reason,
                          "applied_pwm": applied, "hold_remaining": d.hold_remaining},
             "emergency": self.policy.state.emergency,
+            "ac_quiet": {"enabled": ac_quiet,
+                         "active": ac_quiet and r.on_ac is True and manual},
             "error": error,
         }
 
     def wake_key(self) -> tuple:
-        """Changes when the user asks for something: a new fan mode request
-        or a new platform profile. Checked between steps so those take effect
-        within a fraction of a second instead of a full poll interval."""
-        try:
-            st = os.lstat(self.mode_path)
-            mode_stamp = (st.st_ino, st.st_mtime_ns)
-        except OSError:
-            mode_stamp = None
-        return mode_stamp, self.hw.profile()
+        """Changes when the user asks for something: a new fan mode request,
+        AC quiet preference or platform profile. Checked between steps so
+        those take effect within a fraction of a second instead of a full
+        poll interval."""
+        return _stamp(self.mode_path), _stamp(self.ac_quiet_path), self.hw.profile()
 
     # -- lifecycle --
 

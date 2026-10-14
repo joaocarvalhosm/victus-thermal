@@ -50,6 +50,13 @@ class Config:
     # The curve must ask for the fans continuously this long before it takes
     # over from the firmware (a curve at 100 % takes over at once).
     engage_delay: float = 6.0
+    # On AC power, never let the fans stop: run at least this duty (the
+    # driver raises it to the fan table's minimum RPM) and let the curve take
+    # over above it. Cooler chassis while charging; on battery nothing
+    # changes. ac_quiet is the default, `victusctl ac-quiet on|off` (or the
+    # GNOME extension) overrides it and the choice is remembered.
+    ac_quiet: bool = True
+    ac_quiet_duty: float = 15.0
     # Two-state fallback (stock driver without manual pwm): force MAX when the
     # curve asks for at least this duty, release below it minus 15 %.
     twostate_max_duty: float = 70.0
@@ -67,11 +74,19 @@ def _number(raw: dict, key: str, default: float, lo: float, hi: float) -> float:
     return float(value)
 
 
+def _bool(raw: dict, key: str, default: bool) -> bool:
+    value = raw.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be true or false")
+    return value
+
+
 def parse(raw: dict) -> Config:
     """Build a Config from a parsed TOML document. Raises ValueError."""
     known = {
         "poll_interval", "emergency_temp", "emergency_release", "hysteresis",
         "smoothing", "hold_time", "engage_delay", "twostate_max_duty", "curves",
+        "ac_quiet", "ac_quiet_duty",
     }
     unknown = set(raw) - known
     if unknown:
@@ -106,6 +121,8 @@ def parse(raw: dict) -> Config:
         smoothing=_number(raw, "smoothing", d.smoothing, 0.05, 1),
         hold_time=_number(raw, "hold_time", d.hold_time, 0, 600),
         engage_delay=_number(raw, "engage_delay", d.engage_delay, 0, 60),
+        ac_quiet=_bool(raw, "ac_quiet", d.ac_quiet),
+        ac_quiet_duty=_number(raw, "ac_quiet_duty", d.ac_quiet_duty, 1, 50),
         twostate_max_duty=_number(raw, "twostate_max_duty", d.twostate_max_duty, 20, 100),
         curves=curves,
     )

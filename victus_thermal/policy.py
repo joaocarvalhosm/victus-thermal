@@ -68,7 +68,9 @@ class Policy:
                 if v is not None}
 
     def decide(self, r: Readings, mode: str, manual_supported: bool,
-               now: float | None = None) -> Decision:
+               now: float | None = None, ac_quiet: bool = False) -> Decision:
+        """`ac_quiet`: the user's AC quiet preference; it only applies while
+        r.on_ac is True and the driver supports manual pwm."""
         cfg, st = self.cfg, self.state
         now = time.monotonic() if now is None else now
         sensors = self._sensors(r)
@@ -111,6 +113,21 @@ class Policy:
             kind = MAX if st.twostate_max else AUTO
             return Decision(kind, None, f"{profile} (two-state): {duty:.0f}% at {temp:.1f}C",
                             duty, temp)
+
+        if ac_quiet and r.on_ac is True:
+            # On AC the fans never stop: at least ac_quiet_duty, the curve
+            # above it. Already in manual control, so no engage delay.
+            floor = cfg.ac_quiet_duty
+            st.want_since = None
+            if duty <= floor:
+                st.hold_until = None
+                return Decision(MANUAL, duty_to_pwm(floor),
+                                f"{profile}: AC quiet {floor:.0f}% at {temp:.1f}C", floor, temp)
+            st.hold_until = now + cfg.hold_time
+            if duty >= 100:
+                return Decision(MAX, None, f"{profile}: curve max at {temp:.1f}C", duty, temp)
+            return Decision(MANUAL, duty_to_pwm(duty),
+                            f"{profile}: {duty:.0f}% at {temp:.1f}C", duty, temp)
 
         if duty <= 0:
             st.want_since = None

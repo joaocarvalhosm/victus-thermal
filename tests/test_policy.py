@@ -137,6 +137,45 @@ class HoldTest(unittest.TestCase):
         self.assertEqual(p.decide(readings(cpu=45), "curve", True, now=0.1).kind, AUTO)
 
 
+def on_battery(**kw):
+    r = readings(**kw)
+    return Readings(**{**r.__dict__, "on_ac": False})
+
+
+class AcQuietTest(unittest.TestCase):
+    def test_floor_when_cool_on_ac(self):
+        d = Policy(cfg()).decide(readings(cpu=40), "curve", True, now=0, ac_quiet=True)
+        self.assertEqual((d.kind, d.duty), (MANUAL, 15))
+
+    def test_curve_above_the_floor(self):
+        d = Policy(cfg()).decide(readings(cpu=75), "curve", True, now=0, ac_quiet=True)
+        self.assertEqual((d.kind, d.duty), (MANUAL, 65))
+
+    def test_no_engage_delay_when_quiet_is_running(self):
+        p = Policy(cfg(engage_delay=6.0))
+        p.decide(readings(cpu=40), "curve", True, now=0, ac_quiet=True)
+        self.assertEqual(p.decide(readings(cpu=75), "curve", True, now=2, ac_quiet=True).duty, 65)
+
+    def test_battery_is_untouched(self):
+        d = Policy(cfg()).decide(on_battery(cpu=40), "curve", True, now=0, ac_quiet=True)
+        self.assertEqual(d.kind, AUTO)
+
+    def test_unplugging_returns_to_firmware(self):
+        p = Policy(cfg())
+        p.decide(readings(cpu=40), "curve", True, now=0, ac_quiet=True)
+        self.assertEqual(p.decide(on_battery(cpu=40), "curve", True, now=2,
+                                  ac_quiet=True).kind, AUTO)
+
+    def test_overrides_and_emergency_win(self):
+        p = Policy(cfg())
+        self.assertEqual(p.decide(readings(cpu=40), "auto", True, ac_quiet=True).kind, AUTO)
+        self.assertEqual(p.decide(readings(cpu=97), "curve", True, ac_quiet=True).kind, MAX)
+
+    def test_firmware_profile_is_respected(self):
+        p = Policy(cfg(curves={"balanced": FIRMWARE}))
+        self.assertEqual(p.decide(readings(cpu=40), "curve", True, ac_quiet=True).kind, AUTO)
+
+
 class EngageDelayTest(unittest.TestCase):
     def test_waits_for_sustained_demand(self):
         p = Policy(cfg(engage_delay=6.0))

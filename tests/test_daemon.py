@@ -41,6 +41,9 @@ class FakeSysfs:
         self.run_dir = os.path.join(self.root, "run")
         self.mode_file = os.path.join(self.run_dir, "control", "mode")
         os.makedirs(os.path.dirname(self.mode_file))
+        self.state_dir = os.path.join(self.root, "state")
+        os.makedirs(self.state_dir)
+        self.ac_quiet_file = os.path.join(self.state_dir, "ac-quiet")
         self.config = os.path.join(self.root, "config.toml")
 
     def set(self, rel, value):
@@ -58,15 +61,17 @@ class FakeSysfs:
 
 
 class DaemonTest(unittest.TestCase):
-    def make(self, manual_pwm=True, config_text=None):
+    def make(self, manual_pwm=True, config_text=None,
+             base_config="engage_delay = 0\nac_quiet = false\n"):
         fs = FakeSysfs(manual_pwm)
         self.addCleanup(fs.cleanup)
-        # Most tests check a single step; engage_delay is covered in
-        # test_policy.
+        # Most tests check a single step on a cool machine on AC; engage_delay
+        # and AC quiet have their own tests.
         with open(fs.config, "w") as f:
-            f.write("engage_delay = 0\n" + (config_text or ""))
+            f.write(base_config + (config_text or ""))
         daemon = Daemon(Hardware(root=fs.root, nvidia_smi="/nonexistent/nvidia-smi"),
-                        config_path=fs.config, runtime_dir=fs.run_dir)
+                        config_path=fs.config, runtime_dir=fs.run_dir,
+                        state_dir=fs.state_dir)
         return fs, daemon
 
     def test_cool_machine_stays_on_firmware(self):
@@ -234,6 +239,60 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(len(steps), 2)
         self.assertLess(steps[1] - steps[0], 1.0)   # not the 10 s poll interval
         self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "2")  # restored on exit
+
+    # -- AC quiet --
+
+    def ac_quiet_daemon(self, saved=None, on_ac=True):
+        fs, d = self.make(base_config="engage_delay = 0\n")   # ac_quiet default: on
+        fs.set("sys/class/power_supply/ACAD/online", "1" if on_ac else "0")
+        if saved is not None:
+            with open(fs.ac_quiet_file, "w") as f:
+                f.write(saved + "\n")
+        return fs, d
+
+    def test_ac_quiet_keeps_fans_turning_when_cool_on_ac(self):
+        fs, d = self.ac_quiet_daemon()
+        status = d.step()
+        self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "1")
+        self.assertEqual(status["decision"]["duty"], 15)
+        self.assertEqual(status["ac_quiet"], {"enabled": True, "active": True})
+
+    def test_ac_quiet_does_nothing_on_battery(self):
+        fs, d = self.ac_quiet_daemon(on_ac=False)
+        status = d.step()
+        self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "2")
+        self.assertEqual(status["ac_quiet"], {"enabled": True, "active": False})
+
+    def test_saved_off_overrides_default(self):
+        fs, d = self.ac_quiet_daemon(saved="off")
+        status = d.step()
+        self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "2")
+        self.assertFalse(status["ac_quiet"]["enabled"])
+
+    def test_garbage_preference_falls_back_to_config(self):
+        fs, d = self.ac_quiet_daemon(saved="please")
+        self.assertTrue(d.step()["ac_quiet"]["enabled"])
+
+    def test_preference_symlink_is_not_followed(self):
+        fs, d = self.make(config_text="ac_quiet = true\n")
+        target = os.path.join(fs.root, "elsewhere")
+        with open(target, "w") as f:
+            f.write("off\n")
+        os.symlink(target, fs.ac_quiet_file)
+        self.assertTrue(d.step()["ac_quiet"]["enabled"])
+
+    def test_ac_quiet_never_on_stock_driver(self):
+        fs, d = self.make(manual_pwm=False, base_config="engage_delay = 0\n")
+        status = d.step()
+        self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "2")
+        self.assertFalse(status["ac_quiet"]["active"])
+
+    def test_preference_change_wakes_the_daemon(self):
+        fs, d = self.ac_quiet_daemon()
+        before = d.wake_key()
+        with open(fs.ac_quiet_file, "w") as f:
+            f.write("off\n")
+        self.assertNotEqual(before, d.wake_key())
 
     def test_run_restores_firmware_control_on_exit(self):
         fs, d = self.make()

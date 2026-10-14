@@ -82,6 +82,7 @@ de ventoinha junto. Também dá para usar a extensão ou o `victusctl`:
 victusctl status                 # temperaturas, RPM, decisão atual
 victusctl profile performance    # low-power | balanced | performance
 victusctl mode max               # curve | auto | max (volta a "curve" no reboot)
+victusctl ac-quiet off           # silencioso contínuo na tomada: on | off
 ```
 
 Para jogar: **carregador ligado + perfil `performance`**. Isso ativa o modo
@@ -120,6 +121,13 @@ Para evitar o liga-desliga brusco do firmware em picos de temperatura:
   velocidade baixa;
 - **tempo mínimo:** depois de ligar, as ventoinhas ficam `hold_time` (90 s)
   na velocidade baixa antes de devolver o controle ao firmware.
+
+**Silencioso contínuo na tomada** (ligado por padrão): com o carregador
+ligado, as ventoinhas nunca param. Ficam na menor rotação que elas suportam,
+e a curva assume por cima quando esquenta. Isso mantém o chassi e a bateria
+(que esquenta ao carregar) mais frescos. Na bateria nada muda. Liga/desliga
+pela extensão ou com `victusctl ac-quiet on|off`; a escolha é lembrada entre
+reinícios.
 
 Um arquivo inválido é
 recusado por inteiro (o motivo vai para `journalctl -u victus-thermal`) e
