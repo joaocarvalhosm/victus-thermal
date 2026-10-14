@@ -5,6 +5,8 @@ import os
 import shutil
 import stat
 import tempfile
+import threading
+import time
 import unittest
 
 from victus_thermal.daemon import Daemon
@@ -195,6 +197,40 @@ class DaemonTest(unittest.TestCase):
         with self.assertLogs("victus-thermald", level="ERROR"):
             status = d.step()
         self.assertIn("write failed", status["error"])
+
+    def test_wake_key_changes_on_user_requests(self):
+        fs, d = self.make()
+        before = d.wake_key()
+        with open(fs.mode_file, "w") as f:
+            f.write("max\n")
+        after_mode = d.wake_key()
+        self.assertNotEqual(before, after_mode)
+        fs.set("sys/firmware/acpi/platform_profile", "performance")
+        self.assertNotEqual(after_mode, d.wake_key())
+        self.assertEqual(d.wake_key(), d.wake_key())
+
+    def test_mode_request_is_applied_without_waiting_for_poll(self):
+        fs, d = self.make(config_text="poll_interval = 10\n")
+        steps = []
+        real_step = d.step
+
+        def click_max():  # the user clicks while the daemon is sleeping
+            with open(fs.mode_file, "w") as f:
+                f.write("max\n")
+
+        def step():
+            steps.append(time.monotonic())
+            if len(steps) == 1:
+                threading.Timer(0.3, click_max).start()
+            else:
+                d.running = False
+            return real_step()
+
+        d.step = step
+        d.run()
+        self.assertEqual(len(steps), 2)
+        self.assertLess(steps[1] - steps[0], 1.0)   # not the 10 s poll interval
+        self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "2")  # restored on exit
 
     def test_run_restores_firmware_control_on_exit(self):
         fs, d = self.make()

@@ -4,5 +4,5 @@
   "description": "Temperaturas, ventoinhas e perfil térmico do HP Victus na barra superior. Requer o serviço victus-thermal.",
   "shell-version": ["50"],
   "url": "https://github.com/joaocarvalhosm/victus-thermal",
-  "version-name": "1.1.0"
+  "version-name": "1.2.0"
 }

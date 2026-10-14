@@ -1,6 +1,8 @@
 .victus-panel-label {
   padding-left: 4px;
   font-feature-settings: "tnum";
+  /* fixed width: the panel does not shift as the temperature changes */
+  min-width: 2.4em;
 }
 
 .victus-warm .victus-panel-label,

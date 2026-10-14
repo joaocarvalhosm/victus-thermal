@@ -151,7 +151,7 @@ class Hardware:
             igpu=_milli(_read_int(os.path.join(igpu, "temp1_input"))) if igpu else None,
             dgpu=dgpu,
             dgpu_state=dgpu_state,
-            profile=_read(self._p("sys/firmware/acpi/platform_profile")),
+            profile=self.profile(),
             on_ac=self._on_ac(),
             rpm=(
                 _read_int(os.path.join(hp, "fan1_input")) if hp else None,
@@ -159,6 +159,9 @@ class Hardware:
             ),
             pwm_mode=_read_int(os.path.join(hp, "pwm1_enable")) if hp else None,
         )
+
+    def profile(self) -> str | None:
+        return _read(self._p("sys/firmware/acpi/platform_profile"))
 
     def read_pwm(self) -> int | None:
         """Current fan speed as pwm (0-255). The patched driver derives it from

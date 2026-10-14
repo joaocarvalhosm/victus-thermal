@@ -19,8 +19,11 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 Gio._promisify(Gio.File.prototype, 'load_contents_async');
 Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
 
-const STATUS_PATH = '/run/victus-thermal/status.json';
-const POLL_SECONDS = 2;
+const STATUS_DIR = '/run/victus-thermal';
+const STATUS_NAME = 'status.json';
+// Updates arrive through a file monitor the moment the daemon writes; the
+// timer only catches a daemon that stopped writing (stale status).
+const FALLBACK_POLL_SECONDS = 5;
 const STALE_SECONDS = 15;
 const WARM_C = 80;
 const HOT_C = 90;
@@ -32,8 +35,8 @@ const PROFILES = [
 ];
 
 const FAN_MODES = [
-    ['curve', 'Curva automática'],
-    ['auto', 'Firmware HP'],
+    ['curve', 'Automático (recomendado)'],
+    ['auto', 'Somente firmware HP'],
     ['max', 'Máximo'],
 ];
 
@@ -64,8 +67,9 @@ class VictusIndicator extends PanelMenu.Button {
         super._init(0.5, 'Victus Thermal');
         this._extension = extension;
         this._cancellable = new Gio.Cancellable();
-        this._statusFile = Gio.File.new_for_path(STATUS_PATH);
+        this._statusFile = Gio.File.new_for_path(`${STATUS_DIR}/${STATUS_NAME}`);
         this._busy = false;
+        this._pending = false;
 
         const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this._icon = new St.Icon({
@@ -83,11 +87,30 @@ class VictusIndicator extends PanelMenu.Button {
         this.add_child(box);
 
         this._buildMenu();
+        this._watchStatus();
         this._refresh();
-        this._timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, POLL_SECONDS, () => {
-            this._refresh();
-            return GLib.SOURCE_CONTINUE;
-        });
+        this._timer = GLib.timeout_add_seconds(
+            GLib.PRIORITY_DEFAULT, FALLBACK_POLL_SECONDS, () => {
+                this._refresh();
+                return GLib.SOURCE_CONTINUE;
+            });
+    }
+
+    _watchStatus() {
+        // The daemon replaces status.json atomically (write + rename), so
+        // watch the directory and react to the rename landing on our name.
+        try {
+            this._monitor = Gio.File.new_for_path(STATUS_DIR).monitor_directory(
+                Gio.FileMonitorFlags.WATCH_MOVES, this._cancellable);
+            this._monitor.connect('changed', (_m, file, other) => {
+                if (file?.get_basename() === STATUS_NAME ||
+                    other?.get_basename() === STATUS_NAME)
+                    this._refresh();
+            });
+        } catch (e) {
+            // Service not installed yet: the fallback timer still works.
+            this._monitor = null;
+        }
     }
 
     _infoItem(styleClass = null) {
@@ -119,9 +142,16 @@ class VictusIndicator extends PanelMenu.Button {
         // Same setting as GNOME's Power Mode menu (power-profiles-daemon); with
         // the patched hp-wmi it also switches HP's own thermal mode.
         this._profileItems = this._choiceSection('Modo de energia (o mesmo do GNOME)', PROFILES,
-            key => this._run(['victusctl', 'profile', key]));
+            key => this._choose(this._profileItems, key, ['victusctl', 'profile', key]));
         this._modeItems = this._choiceSection('Ventoinhas', FAN_MODES,
-            key => this._run(['victusctl', 'mode', key]));
+            key => this._choose(this._modeItems, key, ['victusctl', 'mode', key]));
+    }
+
+    _choose(items, key, argv) {
+        // Show the choice at once; the next status update confirms it (or
+        // puts the old one back if the command failed).
+        this._setChoices(items, key, true);
+        this._run(argv);
     }
 
     async _run(argv) {
@@ -156,11 +186,16 @@ class VictusIndicator extends PanelMenu.Button {
     }
 
     async _refresh() {
-        if (this._busy)
+        if (this._busy) {
+            this._pending = true;   // coalesce bursts of file events
             return;
+        }
         this._busy = true;
         try {
-            this._update(await this._readStatus());
+            do {
+                this._pending = false;
+                this._update(await this._readStatus());
+            } while (this._pending);
         } catch {
             // cancelled: the indicator is being destroyed
         } finally {
@@ -226,6 +261,8 @@ class VictusIndicator extends PanelMenu.Button {
             GLib.source_remove(this._timer);
             this._timer = null;
         }
+        this._monitor?.cancel();
+        this._monitor = null;
         this._cancellable.cancel();
         super.destroy();
     }

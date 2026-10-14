@@ -36,6 +36,9 @@ MODE_PATH = os.path.join(CONTROL_DIR, "mode")
 # difference is inaudible.
 PWM_WRITE_THRESHOLD = 3
 
+# How often, between control steps, to look for a new mode or profile.
+WAKE_CHECK_INTERVAL = 0.2
+
 log = logging.getLogger("victus-thermald")
 
 
@@ -97,7 +100,7 @@ class Daemon:
         # never drops below it while the curve stays in control.
         self._handover_floor = 0
         self._last_error: str | None = None
-        self._last_reason: str | None = None
+        self._last_log_key: tuple | None = None
 
     # -- config --
 
@@ -170,9 +173,11 @@ class Daemon:
             elif self._last_error:
                 log.info("fan control recovered")
             self._last_error = error
-        if d.reason.split(":")[0] != (self._last_reason or "").split(":")[0]:
+        # Log state changes, not every curve step.
+        log_key = (d.kind, mode, r.profile, self.policy.state.emergency)
+        if log_key != self._last_log_key:
             log.info("%s", d.reason)
-        self._last_reason = d.reason
+            self._last_log_key = log_key
 
         return {
             "ts": round(time.time(), 1),
@@ -189,6 +194,17 @@ class Daemon:
             "emergency": self.policy.state.emergency,
             "error": error,
         }
+
+    def wake_key(self) -> tuple:
+        """Changes when the user asks for something: a new fan mode request
+        or a new platform profile. Checked between steps so those take effect
+        within a fraction of a second instead of a full poll interval."""
+        try:
+            st = os.lstat(self.mode_path)
+            mode_stamp = (st.st_ino, st.st_mtime_ns)
+        except OSError:
+            mode_stamp = None
+        return mode_stamp, self.hw.profile()
 
     # -- lifecycle --
 
@@ -213,8 +229,11 @@ class Daemon:
                     self.hw.restore_firmware_control()
                     sd_notify("WATCHDOG=1")
                 interval = self.policy.cfg.poll_interval
+                key = self.wake_key()
                 while self.running and time.monotonic() - start < interval:
-                    time.sleep(0.25)
+                    time.sleep(WAKE_CHECK_INTERVAL)
+                    if self.wake_key() != key:
+                        break
         finally:
             sd_notify("STOPPING=1")
             if self.hw.restore_firmware_control():

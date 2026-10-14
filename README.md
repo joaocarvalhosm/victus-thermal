@@ -98,7 +98,7 @@ O ícone de ventoinha na barra mostra a temperatura do sensor mais quente:
 laranja a partir de 80 °C, vermelho a partir de 90 °C ou em emergência. O
 menu mostra CPU/GPU/iGPU, RPM, tomada/bateria e o que o daemon está fazendo,
 e permite trocar o perfil (Economia, Equilibrado, Desempenho) e o modo das
-ventoinhas (Curva automática, Firmware HP, Máximo). A extensão não tem
+ventoinhas (Automático (recomendado), Somente firmware HP, Máximo). A extensão não tem
 privilégios: lê `/run/victus-thermal/status.json` e chama o `victusctl`.
 
 ### Curvas
