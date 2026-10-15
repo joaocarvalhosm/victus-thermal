@@ -2,6 +2,13 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [Não lançado]
+### Adicionado
+- `tools/workqueue-watch.sh`: serviço que liga o rastreamento do
+  `workqueue.c:2351` em todo boot e grava a função culpada em
+  `/var/log/victus-workqueue/` no instante do aviso. A ferramenta manual
+  perdia o resultado no reinício forçado que sempre segue esse aviso.
+
 ## [1.8.0] - 2026-10-14
 ### Adicionado
 - **Período de inicialização** (`startup_grace`, 90 s): logo depois que o

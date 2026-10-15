@@ -269,14 +269,20 @@ extras/gpu-on-demand/install.sh --uninstall  # desfaz
 
 ### Diagnóstico de congelamentos
 
-Se o sistema travar e o log mostrar `WARNING: kernel/workqueue.c:2351`, esta
-ferramenta identifica o driver culpado:
+Neste notebook, todo travamento total veio de 25 s a 2 min depois de um
+`WARNING: kernel/workqueue.c:2351`, cujo rastro não diz qual driver o causou.
+O vigia abaixo liga o rastreamento em todo boot e, no instante do aviso,
+grava em disco a função (e o driver) responsável, antes do travamento:
 
 ```bash
-sudo tools/catch-workqueue-warning.sh start    # arma até o próximo reboot
-# ... use normalmente até o próximo aviso/travamento ...
-sudo tools/catch-workqueue-warning.sh report   # mostra a função culpada
+sudo tools/workqueue-watch.sh install     # liga agora e em todo boot
+sudo tools/workqueue-watch.sh report      # mostra o que foi capturado
+sudo tools/workqueue-watch.sh uninstall   # desliga
 ```
+
+As capturas ficam em `/var/log/victus-workqueue/`.
+`tools/catch-workqueue-warning.sh` faz o mesmo de forma manual, só até o
+próximo reboot.
 
 ### Wi-Fi Realtek 8852BE
 
