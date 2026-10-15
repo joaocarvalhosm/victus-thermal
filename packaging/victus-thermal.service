@@ -1,7 +1,11 @@
 [Unit]
 Description=HP Victus thermal control (fan curves per platform profile)
 Documentation=file:///usr/share/doc/victus-thermal/README.md
-After=systemd-modules-load.service power-profiles-daemon.service
+# Only the hp-wmi module is needed; the profile is read from sysfs. Do not
+# order after power-profiles-daemon: on Ubuntu 26.04 it starts after
+# multi-user.target, which wants this unit, and systemd breaks that cycle by
+# dropping this unit's start job at boot.
+After=systemd-modules-load.service
 # Other controllers drive the same pwm1_enable knob; never run two at once.
 Conflicts=victus-fan.service victus-backend.service
 

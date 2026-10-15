@@ -33,12 +33,15 @@ rm -f /usr/bin/victusctl
 rm -rf /usr/lib/victus-thermal /usr/share/doc/victus-thermal /run/victus-thermal
 systemctl daemon-reload
 
-if [[ -n ${SUDO_USER:-} && ${SUDO_USER} != root ]]; then
-	echo "==> removing GNOME extension for ${SUDO_USER}"
-	runuser -u "${SUDO_USER}" -- env \
-		HOME="$(getent passwd "${SUDO_USER}" | cut -d: -f6)" \
-		XDG_RUNTIME_DIR="/run/user/$(id -u "${SUDO_USER}")" \
-		DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u "${SUDO_USER}")/bus" \
+# The desktop user who ran us through sudo or pkexec.
+user="${SUDO_USER:-}"
+[[ -z ${user} && -n ${PKEXEC_UID:-} ]] && user="$(id -nu "${PKEXEC_UID}")"
+if [[ -n ${user} && ${user} != root ]]; then
+	echo "==> removing GNOME extension for ${user}"
+	runuser -u "${user}" -- env \
+		HOME="$(getent passwd "${user}" | cut -d: -f6)" \
+		XDG_RUNTIME_DIR="/run/user/$(id -u "${user}")" \
+		DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u "${user}")/bus" \
 		"$(dirname "$0")/gnome-extension/install.sh" --uninstall || true
 fi
 

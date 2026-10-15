@@ -2,6 +2,22 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [1.7.2] - 2026-10-14
+### Corrigido
+- **O serviço não iniciava no boot:** a unidade pedia para iniciar depois do
+  `power-profiles-daemon`, que no Ubuntu 26.04 inicia depois do
+  `multi-user.target`; o systemd quebrava o ciclo cancelando o
+  `victus-thermal`. A dependência (desnecessária) foi removida.
+### Alterado
+- Novo menu da extensão no padrão do GNOME: cabeçalho com a temperatura e o
+  resumo, sensores em linhas, **Modo de energia** e **Ventoinhas** como
+  submenus com o valor atual e os ícones de energia do GNOME, botão
+  **Iniciar serviço** quando ele está parado (pede a senha na janela do
+  GNOME). Textos secundários respeitam os temas claro e escuro.
+- `install.sh` e `uninstall.sh` aceitam `pkexec` além de `sudo`.
+- `tools/catch-workqueue-warning.sh report` usa o primeiro aviso depois de
+  armado, não o primeiro do boot.
+
 ## [1.7.1] - 2026-10-14
 ### Corrigido
 - O driver (DKMS 1.2.0) só registra a luz do teclado quando a BIOS informa

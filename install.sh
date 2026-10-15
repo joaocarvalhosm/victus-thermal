@@ -78,6 +78,16 @@ installed_driver_versions() {
 		| sed -n 's|^[^/]*/\([^,:]*\).*: installed.*|\1|p'
 }
 
+# The desktop user who ran us through sudo or pkexec (GNOME's password
+# dialog), or nothing when run directly as root.
+invoking_user() {
+	if [[ -n ${SUDO_USER:-} ]]; then
+		echo "${SUDO_USER}"
+	elif [[ -n ${PKEXEC_UID:-} ]]; then
+		id -nu "${PKEXEC_UID}"
+	fi
+}
+
 # UPower only looks for keyboard lights when it starts; make GNOME see ours.
 refresh_upower() {
 	if [[ -e /sys/class/leds/hp::kbd_backlight ]] && systemctl is-active --quiet upower; then
@@ -304,7 +314,8 @@ cmd_driver_install() {
 
 cmd_daemon() {
 	info "installing victus-thermald"
-	local user="${SUDO_USER:-}"
+	local user
+	user="$(invoking_user)"
 
 	for svc in victus-fan.service victus-backend.service; do
 		if [[ $(systemctl list-unit-files "${svc}" 2>/dev/null) == *"${svc}"* ]]; then
@@ -378,7 +389,8 @@ cmd_daemon() {
 }
 
 cmd_extension() {
-	local user="${SUDO_USER:-}"
+	local user
+	user="$(invoking_user)"
 	if [[ -z ${user} || ${user} == root ]]; then
 		warn "run through sudo from your desktop user to install the GNOME extension"
 		return 0

@@ -10,7 +10,7 @@ Secure Boot ligado.
 |---|---|
 | **Notebook** | HP Victus 15-fb2xxx, placa **8C2F** (Ryzen 5 8645HS + RTX 4050) |
 | **Sistema** | Ubuntu 26.04, kernel 7.0.x, GNOME 50 (Wayland), Secure Boot ligado |
-| **Versão** | 1.7.1, veja o [CHANGELOG](CHANGELOG.md) |
+| **Versão** | 1.7.2, veja o [CHANGELOG](CHANGELOG.md) |
 
 ---
 
@@ -122,16 +122,25 @@ ventoinha correspondente.
 ### Extensão da barra
 
 ```
- 🌀 61°   ← sensor mais quente (laranja ≥ 80 °C, vermelho ≥ 90 °C ou emergência)
- ├─ CPU 61 °C · GPU dormindo · iGPU 55 °C
- ├─ Ventoinhas 2400 / 2600 RPM · na tomada
- ├─ Curva: 31% a 61 °C
- ├─ Modo de energia (o mesmo do GNOME)
- │     Economia · Equilibrado · ✓ Desempenho
- ├─ Ventoinhas
- │     ✓ Automático (recomendado) · Somente firmware HP · Máximo
- └─ [x] Silencioso contínuo na tomada
+ 🌀 61°                       ← na barra: sensor mais quente
+┌──────────────────────────────────────┐
+│ 🌀  61 °C                             │  laranja ≥ 80 °C, vermelho ≥ 90 °C
+│     Equilibrado · Na tomada          │
+├──────────────────────────────────────┤
+│ CPU                          61 °C   │
+│ GPU NVIDIA                Desligada  │
+│ GPU integrada                55 °C   │
+│ Ventoinhas         2400 · 2600 RPM   │
+│ Curva: 31% a 61 °C                   │
+├──────────────────────────────────────┤
+│ ⚡ Modo de energia     Equilibrado ›  │  submenus, como no menu do GNOME
+│ 🌀 Ventoinhas           Automático ›  │
+│ Silencioso na tomada           [on]  │
+└──────────────────────────────────────┘
 ```
+
+Se o serviço estiver parado, o menu mostra **Iniciar serviço**, que pede a
+senha na janela do GNOME.
 
 ### Luz do teclado
 
