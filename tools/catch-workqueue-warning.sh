@@ -21,6 +21,7 @@ set -euo pipefail
 
 readonly T=/sys/kernel/tracing
 readonly EVENT="${T}/events/workqueue/workqueue_queue_work/enable"
+readonly SINCE_FILE=/run/catch-workqueue-warning.since
 
 [[ ${EUID} -eq 0 ]] || { echo "run with sudo" >&2; exit 1; }
 [[ -e ${EVENT} ]] || { echo "tracefs not available at ${T}" >&2; exit 1; }
@@ -32,6 +33,7 @@ start)
 	echo 4096 > "${T}/buffer_size_kb"          # per CPU
 	echo 1 > "${EVENT}"
 	echo 1 > /proc/sys/kernel/traceoff_on_warning
+	date '+%Y-%m-%d %H:%M:%S' > "${SINCE_FILE}"
 	echo 1 > "${T}/tracing_on"
 	echo "armed. Use the laptop normally; after the next freeze/warning run: $0 report"
 	;;
@@ -45,9 +47,12 @@ status)
 	fi
 	;;
 report)
-	warn="$(journalctl -k -b --no-pager -o cat | grep -m1 'WARNING: kernel/workqueue.c' || true)"
+	# The trace froze at the first warning after `start`, so use that one.
+	since="$(cat "${SINCE_FILE}" 2>/dev/null || echo today)"
+	warn="$(journalctl -k -b --since "${since}" --no-pager -o cat \
+		| grep -m1 'WARNING: kernel/workqueue.c' || true)"
 	if [[ -z ${warn} ]]; then
-		echo "no workqueue warning in this boot's kernel log yet"
+		echo "no workqueue warning since the tracer was armed (${since})"
 		exit 0
 	fi
 	echo "warning: ${warn}"
@@ -55,12 +60,16 @@ report)
 	echo "last queued work items on CPU ${cpu}:"
 	grep -E "\[0*${cpu}\]" "${T}/trace" | grep workqueue_queue_work | tail -5
 	echo
+	echo "most frequent work functions in the buffer (all CPUs):"
+	grep -o 'function=[^ ]*' "${T}/trace" | sort | uniq -c | sort -rn | head -8
+	echo
 	echo "the 'function=' of the final line is the work item that tripped the WARN;"
 	echo "find its driver with: grep -w <function> /proc/kallsyms"
 	;;
 stop)
 	echo 0 > "${EVENT}"
 	echo 0 > /proc/sys/kernel/traceoff_on_warning
+	rm -f "${SINCE_FILE}"
 	echo 1 > "${T}/tracing_on"
 	echo > "${T}/trace"
 	echo "disarmed"
