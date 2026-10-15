@@ -292,7 +292,8 @@ class DaemonTest(unittest.TestCase):
     # -- AC quiet --
 
     def ac_quiet_daemon(self, saved=None, on_ac=True):
-        fs, d = self.make(base_config="engage_delay = 0\nstartup_grace = 0\n")   # ac_quiet default: on
+        # ac_quiet left at its default (on)
+        fs, d = self.make(base_config="engage_delay = 0\nstartup_grace = 0\n")
         fs.set("sys/class/power_supply/ACAD/online", "1" if on_ac else "0")
         if saved is not None:
             with open(fs.ac_quiet_file, "w") as f:
