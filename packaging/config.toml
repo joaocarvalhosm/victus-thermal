@@ -26,6 +26,12 @@ smoothing = 0.25
 # (0 - 600). Stops repeated spikes from turning into start/stop cycles.
 hold_time = 90.0
 
+# Seconds after the service starts (boot) during which the fans stay with the
+# HP firmware, like before login (0 - 600). Boot load briefly heats the CPU;
+# without this the curve would spin the fans up while the desktop loads. The
+# emergency check and a fan mode you pick yourself still apply.
+startup_grace = 90.0
+
 # Seconds the curve must keep asking for the fans before it takes over from
 # the firmware (0 - 60). Ignores short bursts; a curve at 100 % takes over
 # at once, and the emergency check is always immediate.

@@ -62,7 +62,7 @@ class FakeSysfs:
 
 class DaemonTest(unittest.TestCase):
     def make(self, manual_pwm=True, config_text=None,
-             base_config="engage_delay = 0\nac_quiet = false\n"):
+             base_config="engage_delay = 0\nstartup_grace = 0\nac_quiet = false\n"):
         fs = FakeSysfs(manual_pwm)
         self.addCleanup(fs.cleanup)
         # Most tests check a single step on a cool machine on AC; engage_delay
@@ -292,7 +292,7 @@ class DaemonTest(unittest.TestCase):
     # -- AC quiet --
 
     def ac_quiet_daemon(self, saved=None, on_ac=True):
-        fs, d = self.make(base_config="engage_delay = 0\n")   # ac_quiet default: on
+        fs, d = self.make(base_config="engage_delay = 0\nstartup_grace = 0\n")   # ac_quiet default: on
         fs.set("sys/class/power_supply/ACAD/online", "1" if on_ac else "0")
         if saved is not None:
             with open(fs.ac_quiet_file, "w") as f:
@@ -331,7 +331,7 @@ class DaemonTest(unittest.TestCase):
         self.assertTrue(d.step()["ac_quiet"]["enabled"])
 
     def test_ac_quiet_never_on_stock_driver(self):
-        fs, d = self.make(manual_pwm=False, base_config="engage_delay = 0\n")
+        fs, d = self.make(manual_pwm=False, base_config="engage_delay = 0\nstartup_grace = 0\n")
         status = d.step()
         self.assertEqual(fs.get(f"{HP}/pwm1_enable"), "2")
         self.assertFalse(status["ac_quiet"]["active"])

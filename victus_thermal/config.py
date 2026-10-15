@@ -47,6 +47,11 @@ class Config:
     # speed for at least this long before handing back to the firmware, so
     # repeated spikes do not turn into start/stop cycles.
     hold_time: float = 90.0
+    # Leave the fans to the HP firmware for this long after the daemon starts
+    # (boot): boot load briefly heats the CPU and the curve would otherwise
+    # spin the fans up hard while the desktop is still loading. The
+    # emergency check and an explicit user mode still apply.
+    startup_grace: float = 90.0
     # The curve must ask for the fans continuously this long before it takes
     # over from the firmware (a curve at 100 % takes over at once).
     engage_delay: float = 6.0
@@ -97,7 +102,7 @@ def parse(raw: dict) -> Config:
     known = {
         "poll_interval", "emergency_temp", "emergency_release", "hysteresis",
         "smoothing", "hold_time", "engage_delay", "twostate_max_duty", "curves",
-        "ac_quiet", "ac_quiet_duty", "max_profiles",
+        "ac_quiet", "ac_quiet_duty", "max_profiles", "startup_grace",
     }
     unknown = set(raw) - known
     if unknown:
@@ -131,6 +136,7 @@ def parse(raw: dict) -> Config:
         hysteresis=_number(raw, "hysteresis", d.hysteresis, 0, 15),
         smoothing=_number(raw, "smoothing", d.smoothing, 0.05, 1),
         hold_time=_number(raw, "hold_time", d.hold_time, 0, 600),
+        startup_grace=_number(raw, "startup_grace", d.startup_grace, 0, 600),
         engage_delay=_number(raw, "engage_delay", d.engage_delay, 0, 60),
         ac_quiet=_bool(raw, "ac_quiet", d.ac_quiet),
         ac_quiet_duty=_number(raw, "ac_quiet_duty", d.ac_quiet_duty, 1, 50),

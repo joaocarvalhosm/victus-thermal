@@ -55,6 +55,9 @@ class Policy:
 
     def __post_init__(self) -> None:
         self.state = PolicyState.for_config(self.cfg)
+        # First decision time; startup_grace counts from here and, unlike
+        # PolicyState, survives a config reload.
+        self.started_at: float | None = None
 
     def reconfigure(self, cfg: Config) -> None:
         if cfg != self.cfg:
@@ -73,6 +76,8 @@ class Policy:
         r.on_ac is True and the driver supports manual pwm."""
         cfg, st = self.cfg, self.state
         now = time.monotonic() if now is None else now
+        if self.started_at is None:
+            self.started_at = now
         sensors = self._sensors(r)
 
         if sensors and max(sensors.values()) >= cfg.emergency_temp:
@@ -94,6 +99,13 @@ class Policy:
             st.hysteresis.reset()
             st.hold_until = None
             return Decision(AUTO, None, "cpu sensor unavailable: firmware control")
+
+        grace_left = cfg.startup_grace - (now - self.started_at)
+        if grace_left > 0:
+            # Keep the average warm so the curve starts from a settled
+            # temperature rather than a boot-time spike.
+            st.smoothing.update(max(sensors.values()))
+            return Decision(AUTO, None, f"startup: firmware control for {grace_left:.0f}s")
 
         profile = r.profile if r.profile in cfg.curves else "balanced"
         curve = cfg.curves[profile]

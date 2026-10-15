@@ -2,6 +2,18 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [1.8.0] - 2026-10-14
+### Adicionado
+- **Período de inicialização** (`startup_grace`, 90 s): logo depois que o
+  serviço sobe (no boot), as ventoinhas ficam com o firmware da HP. A carga
+  do boot aquece a CPU por alguns instantes, e a curva acelerava as
+  ventoinhas enquanto o desktop carregava. A emergência e um modo escolhido
+  manualmente continuam valendo. A extensão mostra "Iniciando: firmware HP no
+  controle".
+### Corrigido
+- O `config.toml` padrão da 1.6.0–1.7.2 não estava na lista de arquivos não
+  editados, então o instalador não o atualizaria; agora está.
+
 ## [1.7.2] - 2026-10-14
 ### Corrigido
 - **O serviço não iniciava no boot:** a unidade pedia para iniciar depois do

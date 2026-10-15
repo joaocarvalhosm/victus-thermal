@@ -10,7 +10,7 @@ Secure Boot ligado.
 |---|---|
 | **Notebook** | HP Victus 15-fb2xxx, placa **8C2F** (Ryzen 5 8645HS + RTX 4050) |
 | **Sistema** | Ubuntu 26.04, kernel 7.0.x, GNOME 50 (Wayland), Secure Boot ligado |
-| **Versão** | 1.7.2, veja o [CHANGELOG](CHANGELOG.md) |
+| **Versão** | 1.8.0, veja o [CHANGELOG](CHANGELOG.md) |
 
 ---
 
@@ -183,6 +183,7 @@ victusctl ac-quiet off           # silencioso contínuo na tomada: on | off
 
 | Situação | O que acontece |
 |---|---|
+| **Ligando o notebook** (primeiros 90 s do serviço) | firmware HP no controle, como antes do login |
 | Frio, **na bateria** | firmware HP no controle; as ventoinhas podem parar (silêncio) |
 | Frio, **na tomada** | rotação mínima contínua (*silencioso contínuo na tomada*) |
 | Pico rápido de temperatura | ignorado: a temperatura é suavizada (~7 s) |
@@ -216,6 +217,7 @@ para `journalctl -u victus-thermal`, e os valores padrão continuam valendo.
 | `smoothing` | `0.25` | suavização da temperatura (1 = sem suavizar) |
 | `engage_delay` | `6.0` | segundos de calor contínuo antes de a curva assumir |
 | `hold_time` | `90.0` | segundos em velocidade baixa antes de devolver ao firmware |
+| `startup_grace` | `90.0` | segundos com o firmware HP no controle depois que o serviço inicia (boot) |
 | `ac_quiet` / `ac_quiet_duty` | `true` / `15` | silencioso contínuo na tomada e sua velocidade |
 | `max_profiles` | `["performance"]` | perfis em que o modo Máximo é permitido |
 | `[curves]` | acima | uma curva por perfil, ou `"firmware"` para deixar o perfil só com a HP |

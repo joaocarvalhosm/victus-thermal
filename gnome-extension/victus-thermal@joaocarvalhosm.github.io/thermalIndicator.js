@@ -55,6 +55,8 @@ function describeDecision(s) {
     const d = s.decision;
     if (s.emergency)
         return 'Emergência: ventoinhas no máximo até esfriar';
+    if (d.reason.startsWith('startup'))
+        return 'Iniciando: firmware HP no controle';
     if (d.kind === 'manual' && d.reason.includes('AC quiet'))
         return `Silencioso na tomada (${Math.round(d.duty)}%)`;
     if (d.kind === 'manual' && d.hold_remaining) {

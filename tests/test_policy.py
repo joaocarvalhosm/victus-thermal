@@ -20,6 +20,7 @@ def cfg(**kw):
     curves.update(kw.pop("curves", {}))
     # smoothing=1 and hysteresis=0 make single-step expectations exact
     kw.setdefault("engage_delay", 0.0)
+    kw.setdefault("startup_grace", 0.0)
     return Config(smoothing=1.0, hysteresis=0.0, curves=curves, **kw)
 
 
@@ -84,7 +85,8 @@ class CurveTest(unittest.TestCase):
         self.assertEqual(p.decide(readings(cpu=85), "curve", True).kind, AUTO)
 
     def test_hysteresis_holds_on_the_way_down(self):
-        p = Policy(Config(smoothing=1.0, hysteresis=5.0, engage_delay=0.0, curves=cfg().curves))
+        p = Policy(Config(smoothing=1.0, hysteresis=5.0, engage_delay=0.0, startup_grace=0.0,
+                          curves=cfg().curves))
         self.assertEqual(p.decide(readings(cpu=75), "curve", True).pwm, 166)
         self.assertEqual(p.decide(readings(cpu=72), "curve", True).pwm, 166)
 
@@ -176,6 +178,49 @@ class AcQuietTest(unittest.TestCase):
         self.assertEqual(p.decide(readings(cpu=40), "curve", True, ac_quiet=True).kind, AUTO)
 
 
+class StartupGraceTest(unittest.TestCase):
+    """Right after the daemon starts (boot), the firmware keeps the fans."""
+
+    def test_firmware_during_grace_even_when_hot(self):
+        p = Policy(cfg(startup_grace=90.0))
+        d = p.decide(readings(cpu=86), "curve", True, now=100)
+        self.assertEqual(d.kind, AUTO)
+        self.assertIn("startup", d.reason)
+
+    def test_curve_after_grace(self):
+        p = Policy(cfg(startup_grace=90.0))
+        p.decide(readings(cpu=86), "curve", True, now=100)
+        self.assertEqual(p.decide(readings(cpu=86), "curve", True, now=191).kind, MANUAL)
+
+    def test_emergency_still_immediate(self):
+        p = Policy(cfg(startup_grace=90.0))
+        self.assertEqual(p.decide(readings(cpu=97), "curve", True, now=100).kind, MAX)
+
+    def test_explicit_user_mode_respected(self):
+        p = Policy(cfg(startup_grace=90.0, max_profiles=("balanced",)))
+        self.assertEqual(p.decide(readings(cpu=50), "max", True, now=100).kind, MAX)
+
+    def test_ac_quiet_waits_for_grace_too(self):
+        p = Policy(cfg(startup_grace=90.0))
+        self.assertEqual(p.decide(readings(cpu=40), "curve", True, now=100,
+                                  ac_quiet=True).kind, AUTO)
+
+    def test_boot_spike_does_not_survive_grace(self):
+        # 86 C at boot, settling to 45 C: once the grace ends the smoothed
+        # temperature has followed, so the fans are not started for nothing.
+        p = Policy(Config(startup_grace=90.0, engage_delay=0.0))
+        p.decide(readings(cpu=86), "curve", True, now=0)
+        for t in range(2, 92, 2):
+            p.decide(readings(cpu=45), "curve", True, now=t)
+        self.assertEqual(p.decide(readings(cpu=45), "curve", True, now=92).kind, AUTO)
+
+    def test_grace_survives_config_reload(self):
+        p = Policy(cfg(startup_grace=90.0))
+        p.decide(readings(cpu=50), "curve", True, now=0)
+        p.reconfigure(cfg(startup_grace=90.0, poll_interval=1.0))
+        self.assertEqual(p.decide(readings(cpu=86), "curve", True, now=91).kind, MANUAL)
+
+
 class EngageDelayTest(unittest.TestCase):
     def test_waits_for_sustained_demand(self):
         p = Policy(cfg(engage_delay=6.0))
@@ -201,7 +246,7 @@ class EngageDelayTest(unittest.TestCase):
 
 class SpikeFilterTest(unittest.TestCase):
     def test_short_spike_does_not_start_the_fans(self):
-        p = Policy(Config())                         # shipped defaults
+        p = Policy(Config(startup_grace=0.0))        # shipped defaults otherwise
         for t in range(0, 20, 2):
             p.decide(readings(cpu=45), "curve", True, now=t)
         # a 2-sample burst to 62 C (Tctl spike while opening an app)
@@ -210,7 +255,7 @@ class SpikeFilterTest(unittest.TestCase):
         self.assertEqual(kinds, [AUTO, AUTO])
 
     def test_sustained_heat_starts_the_fans(self):
-        p = Policy(Config())
+        p = Policy(Config(startup_grace=0.0))
         for t in range(0, 20, 2):
             p.decide(readings(cpu=45), "curve", True, now=t)
         kinds = [p.decide(readings(cpu=62), "curve", True, now=20 + 2 * i).kind
@@ -218,7 +263,7 @@ class SpikeFilterTest(unittest.TestCase):
         self.assertIn(MANUAL, kinds)
 
     def test_emergency_ignores_smoothing(self):
-        p = Policy(Config())
+        p = Policy(Config(startup_grace=0.0))
         p.decide(readings(cpu=45), "curve", True, now=0)
         self.assertEqual(p.decide(readings(cpu=96), "curve", True, now=2).kind, MAX)
 
