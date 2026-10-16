@@ -11,5 +11,10 @@
       <default>60</default>
       <summary>Seconds without keyboard or mouse input before the light turns off</summary>
     </key>
+    <key name="turbo-shortcut" type="as">
+      <default><![CDATA[['Launch2']]]></default>
+      <summary>Shortcut that toggles turbo (performance profile + fans at max)</summary>
+      <description>Launch2 is the OMEN key on HP Victus and OMEN laptops.</description>
+    </key>
   </schema>
 </schemalist>

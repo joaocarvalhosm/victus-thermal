@@ -4,6 +4,8 @@
   victusctl mode curve|auto|max      fan mode (resets to curve on reboot)
   victusctl profile [NAME]           show or set the platform profile
   victusctl ac-quiet [on|off]        fans never stop on AC (remembered)
+  victusctl turbo [on|off|toggle]    performance profile + fans at max, or
+                                     back to balanced + automatic fans
 """
 
 from __future__ import annotations
@@ -16,11 +18,12 @@ import sys
 import tempfile
 import time
 
-from .daemon import AC_QUIET_PATH, MODE_PATH, STATUS_PATH
-from .policy import MODES
+from .daemon import AC_QUIET_PATH, MODE_PATH, STATUS_PATH, read_mode
+from .policy import MAX, MODES
 
 # power-profiles-daemon names for each kernel platform_profile
 PPD_NAMES = {"low-power": "power-saver", "balanced": "balanced", "performance": "performance"}
+PROFILE_PATH = "/sys/firmware/acpi/platform_profile"
 
 
 def _status() -> dict | None:
@@ -111,10 +114,65 @@ def cmd_ac_quiet(args) -> int:
     return 0
 
 
+def _read_profile() -> str | None:
+    try:
+        with open(PROFILE_PATH) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def turbo_active() -> bool:
+    """Turbo = performance profile with the fans forced to max."""
+    return _read_profile() == "performance" and read_mode(MODE_PATH) == MAX
+
+
+def _set_profile(name: str) -> bool:
+    # Go through power-profiles-daemon so GNOME's menu stays in sync.
+    try:
+        subprocess.run(["powerprofilesctl", "set", PPD_NAMES[name]], check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"powerprofilesctl failed: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
+def _wait_profile(name: str, timeout: float = 3.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while _read_profile() != name:
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(0.05)
+    return True
+
+
+def cmd_turbo(args) -> int:
+    active = turbo_active()
+    if args.state is None:
+        print("turbo: " + ("on" if active else "off"))
+        return 0
+    want = (not active) if args.state == "toggle" else args.state == "on"
+    if want:
+        # The daemon refuses max outside the performance profile, so the
+        # profile has to be in place before the fan request is written.
+        if not _set_profile("performance"):
+            return 1
+        if not _wait_profile("performance"):
+            print("the performance profile did not take effect", file=sys.stderr)
+            return 1
+        if not _write_request(MODE_PATH, MAX):
+            return 1
+    else:
+        if not _write_request(MODE_PATH, "curve") or not _set_profile("balanced"):
+            return 1
+    print("turbo: " + ("on" if want else "off"))
+    return 0
+
+
 def cmd_profile(args) -> int:
     if args.name is None:
         try:
-            with open("/sys/firmware/acpi/platform_profile") as f:
+            with open(PROFILE_PATH) as f:
                 current = f.read().strip()
             with open("/sys/firmware/acpi/platform_profile_choices") as f:
                 choices = f.read().split()
@@ -123,11 +181,7 @@ def cmd_profile(args) -> int:
             return 1
         print(" ".join(f"[{c}]" if c == current else c for c in choices))
         return 0
-    # Go through power-profiles-daemon so GNOME's menu stays in sync.
-    try:
-        subprocess.run(["powerprofilesctl", "set", PPD_NAMES[args.name]], check=True)
-    except (OSError, subprocess.CalledProcessError) as exc:
-        print(f"powerprofilesctl failed: {exc}", file=sys.stderr)
+    if not _set_profile(args.name):
         return 1
     print(f"profile: {args.name}")
     return 0
@@ -148,5 +202,8 @@ def main(argv: list[str] | None = None) -> int:
     q = sub.add_parser("ac-quiet", help="fans never stop on AC (on/off, remembered)")
     q.add_argument("state", nargs="?", choices=("on", "off"))
     q.set_defaults(func=cmd_ac_quiet)
+    t = sub.add_parser("turbo", help="performance + max fans, or back to balanced + auto")
+    t.add_argument("state", nargs="?", choices=("on", "off", "toggle"))
+    t.set_defaults(func=cmd_turbo)
     args = p.parse_args(argv)
     return args.func(args)

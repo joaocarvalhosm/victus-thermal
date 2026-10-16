@@ -29,6 +29,44 @@ const WARM_C = 80;
 // Secondary text, like GNOME's own dimmed labels; works in light and dark.
 const DIM_OPACITY = 166;
 const HOT_C = 90;
+// Turbo spin of the panel fan: starts slow, speeds up, and settles back on
+// a whole number of turns, so the icon ends exactly where it started.
+const SPIN_MS = 8000;
+const SPIN_PEAK_TURNS_PER_S = 3;
+const SPIN_START_SPEED = 0.08;   // fraction of the peak speed at the start
+const SPIN_ACCEL_UNTIL = 0.85;   // fraction of SPIN_MS spent speeding up
+const SPIN_STOP_MS = 500;        // turbo switched off while spinning
+
+/** Relative speed at progress p (0..1): rises, then glides to a stop. */
+function spinSpeed(p) {
+    if (p <= SPIN_ACCEL_UNTIL) {
+        const x = p / SPIN_ACCEL_UNTIL;
+        return SPIN_START_SPEED + (1 - SPIN_START_SPEED) * x * x;
+    }
+    const x = (p - SPIN_ACCEL_UNTIL) / (1 - SPIN_ACCEL_UNTIL);
+    return 0.5 * (1 + Math.cos(Math.PI * x));
+}
+
+/** Cumulative rotation, normalised to 0..1, sampled once. */
+const SPIN_STEPS = 400;
+const SPIN_TABLE = (() => {
+    const table = [0];
+    for (let i = 1; i <= SPIN_STEPS; i++) {
+        const mid = spinSpeed((i - 0.5) / SPIN_STEPS);
+        table.push(table[i - 1] + mid / SPIN_STEPS);
+    }
+    const total = table[SPIN_STEPS];
+    return {fractions: table.map(v => v / total), total};
+})();
+const SPIN_TURNS = Math.max(1, Math.round(
+    SPIN_PEAK_TURNS_PER_S * (SPIN_MS / 1000) * SPIN_TABLE.total));
+
+function spinFraction(p) {
+    const x = Math.min(Math.max(p, 0), 1) * SPIN_STEPS;
+    const i = Math.min(Math.floor(x), SPIN_STEPS - 1);
+    const f = SPIN_TABLE.fractions;
+    return f[i] + (f[i + 1] - f[i]) * (x - i);
+}
 
 // [key, label, icon] — the icons are the ones GNOME's own power menu uses.
 const PROFILES = [
@@ -358,6 +396,10 @@ class VictusIndicator extends PanelMenu.Button {
         else if (hasTemp && hottest >= WARM_C)
             level = 'victus-warm';
         this._setLevel(level);
+        if (s.profile === 'performance' && s.mode === 'max')
+            this.add_style_class_name('victus-turbo');
+        else
+            this.remove_style_class_name('victus-turbo');
 
         const profile = PROFILES.find(([key]) => key === s.profile);
         this._header.title.text = hasTemp ? `${Math.round(hottest)} °C` : '–';
@@ -390,7 +432,49 @@ class VictusIndicator extends PanelMenu.Button {
         this._acQuietItem.setSensitive(s.ac_quiet !== undefined);
     }
 
+    /** Spin the panel fan for SPIN_MS: slow at first, then faster. */
+    spinFan() {
+        this._stopSpinTimeline();
+        const icon = this._icon;
+        icon.remove_all_transitions();
+        icon.set_pivot_point(0.5, 0.5);
+        icon.rotation_angle_z = 0;
+        const timeline = new Clutter.Timeline({actor: icon, duration: SPIN_MS});
+        timeline.connect('new-frame', (t, msecs) => {
+            icon.rotation_angle_z = 360 * SPIN_TURNS * spinFraction(msecs / SPIN_MS);
+        });
+        timeline.connect('completed', () => {
+            icon.rotation_angle_z = 0;   // a whole number of turns: no jump
+            this._spinTimeline = null;
+        });
+        this._spinTimeline = timeline;
+        timeline.start();
+    }
+
+    /** Turbo went off mid-spin: glide to the next upright position. */
+    stopFan() {
+        if (!this._spinTimeline)
+            return;
+        this._stopSpinTimeline();
+        const icon = this._icon;
+        const angle = icon.rotation_angle_z;
+        icon.ease({
+            rotation_angle_z: Math.ceil(angle / 90) * 90 + 90,   // the fan is 4-fold symmetric
+            duration: SPIN_STOP_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            onStopped: () => (icon.rotation_angle_z = 0),
+        });
+    }
+
+    _stopSpinTimeline() {
+        if (!this._spinTimeline)
+            return;
+        this._spinTimeline.stop();
+        this._spinTimeline = null;
+    }
+
     destroy() {
+        this._stopSpinTimeline();
         if (this._timer) {
             GLib.source_remove(this._timer);
             this._timer = null;

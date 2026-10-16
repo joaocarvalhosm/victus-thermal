@@ -2,6 +2,23 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [1.9.0] - 2026-10-16
+### Adicionado
+- **Botão OMEN = turbo:** o botão OMEN (`KEY_PROG2`, "Launch2" no GNOME)
+  alterna entre o perfil Desempenho com as ventoinhas no Máximo e o perfil
+  Equilibrado com as ventoinhas no Automático. A tecla pode ser mudada com a
+  chave `turbo-shortcut`.
+- Avisos do turbo: uma mensagem no alto e no centro da tela. Ao ligar, a
+  ventoinha da barra gira por 8 s, acelerando aos poucos, e para alinhada.
+  Com o turbo ligado, ela fica na cor de destaque. Os avisos esperam o GNOME
+  colocar ou tirar o ícone de Desempenho dele, para a barra não pular no
+  meio da animação.
+- O ícone da barra troca de cor (turbo, quente, muito quente) com
+  esmaecimento suave em vez de mudar de uma vez.
+- `victusctl turbo [on|off|toggle]`: o mesmo pelo terminal. Ele espera o
+  perfil Desempenho valer antes de pedir o Máximo, que o serviço recusa em
+  outros perfis.
+
 ## [1.8.1] - 2026-10-16
 ### Adicionado
 - `extras/kernel-failover`: o kernel genérico mais novo é o padrão, e o

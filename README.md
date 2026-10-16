@@ -10,7 +10,7 @@ Secure Boot ligado.
 |---|---|
 | **Notebook** | HP Victus 15-fb2xxx, placa **8C2F** (Ryzen 5 8645HS + RTX 4050) |
 | **Sistema** | Ubuntu 26.04, kernel 7.0.x, GNOME 50 (Wayland), Secure Boot ligado |
-| **Versão** | 1.8.1, veja o [CHANGELOG](CHANGELOG.md) |
+| **Versão** | 1.9.0, veja o [CHANGELOG](CHANGELOG.md) |
 
 ---
 
@@ -58,6 +58,8 @@ Este projeto corrige isso na raiz e acrescenta o que o OMEN fazia.
   qualquer modo.
 - 🖥️ **Indicador na barra do GNOME:** temperatura, RPM e controles, com
   atualização instantânea.
+- 🚀 **Botão OMEN = turbo:** um toque põe o perfil Desempenho com as
+  ventoinhas no máximo, e outro toque volta ao normal.
 - 🎮 **NVIDIA só sob demanda:** a RTX desliga quando ninguém usa, e os jogos
   continuam abrindo nela.
 - 🔐 **Secure Boot ligado:** o driver é assinado com a sua chave (MOK) e
@@ -170,6 +172,35 @@ nunca é acesa de volta automaticamente.
 
 O modo forçado volta para Automático ao reiniciar.
 
+### Botão OMEN: turbo
+
+O botão **OMEN** do teclado, que no Windows abria o OMEN Gaming Hub, liga e
+desliga o **turbo**:
+
+| Toque | O que acontece |
+|---|---|
+| 1º | Perfil **Desempenho** (CPU e RTX com mais potência) e ventoinhas no **Máximo** |
+| 2º | Volta para **Equilibrado** com as ventoinhas no **Automático** |
+
+- **Aviso:** "Turbo ligado" ou "Turbo desligado" aparece no alto e no centro
+  da tela, onde o GNOME mostra as notificações, e some depois de 2,5 s.
+- **Ventoinha da barra:** ao ligar, ela gira por 8 s, começando devagar e
+  acelerando, e para na posição original. Enquanto o turbo estiver ligado,
+  fica na cor de destaque do tema. Se o turbo desligar no meio do giro, ela
+  freia suavemente.
+- **Quando os avisos aparecem:** 0,3 s depois da troca, quando o GNOME já
+  colocou ou tirou o ícone de Desempenho dele na barra.
+- **Sincronia:** o menu de energia do GNOME e a extensão mostram a troca na
+  hora. Mudar o perfil por outro caminho também encerra o Máximo, como sempre.
+- **Uso:** o turbo é para uso **na tomada**. O Máximo é barulhento, e o
+  Desempenho gasta a bateria rápido.
+- **Jogos:** já abrem na RTX pelo extra
+  [NVIDIA só sob demanda](#nvidia-só-sob-demanda).
+
+Para usar outra tecla:
+`gsettings --schemadir ~/.local/share/gnome-shell/extensions/victus-thermal@joaocarvalhosm.github.io/schemas set org.gnome.shell.extensions.victus-thermal turbo-shortcut "['<Super>t']"`.
+O padrão é `['Launch2']`, que é o botão OMEN.
+
 ### Terminal
 
 ```bash
@@ -177,6 +208,7 @@ victusctl status                 # temperaturas, RPM, decisão atual
 victusctl profile performance    # low-power | balanced | performance
 victusctl mode max               # curve | auto | max
 victusctl ac-quiet off           # silencioso contínuo na tomada: on | off
+victusctl turbo toggle           # o mesmo que o botão OMEN: on | off | toggle
 ```
 
 ## Como as ventoinhas se comportam
