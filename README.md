@@ -10,7 +10,7 @@ Secure Boot ligado.
 |---|---|
 | **Notebook** | HP Victus 15-fb2xxx, placa **8C2F** (Ryzen 5 8645HS + RTX 4050) |
 | **Sistema** | Ubuntu 26.04, kernel 7.0.x, GNOME 50 (Wayland), Secure Boot ligado |
-| **Versão** | 1.8.0, veja o [CHANGELOG](CHANGELOG.md) |
+| **Versão** | 1.8.1, veja o [CHANGELOG](CHANGELOG.md) |
 
 ---
 
@@ -267,12 +267,36 @@ extras/gpu-on-demand/install.sh --uninstall  # desfaz
   `cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status`
   (`suspended` = desligada).
 
+### Kernel com failover
+
+Usa o kernel **genérico mais novo** (o padrão do Ubuntu, que recebe mais
+atualizações) e, se um boot falhar, entra **sozinho no kernel OEM** no boot
+seguinte:
+
+```bash
+sudo apt install linux-generic-hwe-26.04 linux-oem-26.04   # os dois atualizados
+sudo extras/kernel-failover/install.sh                     # instala
+sudo extras/kernel-failover/install.sh --uninstall         # desfaz
+```
+
+- Como funciona: o GRUB marca `recordfail` ao iniciar o kernel, e o Ubuntu
+  apaga a marca quando o boot termina (`grub2-common.service`). Se a marca
+  continuar lá, o boot anterior falhou (pânico, travamento ou desligamento
+  antes do login). O GRUB então mostra o menu por 10 s e escolhe o kernel
+  OEM.
+- Um boot bom no OEM apaga a marca, e o boot seguinte volta ao genérico.
+- As versões são lidas a cada `update-grub`, que roda em toda atualização de
+  kernel. Não é preciso mexer em nada quando sai um kernel novo.
+- O driver das ventoinhas (DKMS) e os módulos NVIDIA são instalados para os
+  dois kernels.
+- Um travamento **depois** do login não troca o kernel. Esse é o comportamento
+  certo, porque o kernel subiu sem problemas.
+
 ### Diagnóstico de congelamentos
 
-Neste notebook, todo travamento total veio de 25 s a 2 min depois de um
-`WARNING: kernel/workqueue.c:2351`, cujo rastro não diz qual driver o causou.
-O vigia abaixo liga o rastreamento em todo boot e, no instante do aviso,
-grava em disco a função (e o driver) responsável, antes do travamento:
+Se o aviso `WARNING: kernel/workqueue.c:2351` aparecer no log, o vigia abaixo
+liga o rastreamento em todo boot. No instante do aviso, ele grava em disco a
+função (e o driver) responsável, antes de um possível travamento:
 
 ```bash
 sudo tools/workqueue-watch.sh install     # liga agora e em todo boot
@@ -282,11 +306,12 @@ sudo tools/workqueue-watch.sh uninstall   # desliga
 
 As capturas ficam em `/var/log/victus-workqueue/`.
 `tools/catch-workqueue-warning.sh` faz o mesmo de forma manual, só até o
-próximo reboot.
+próximo reboot. Antes de usar, veja
+[Travamentos totais ao baixar ou salvar arquivos](#travamentos-totais).
 
 ### Wi-Fi Realtek 8852BE
 
-Se o culpado for o Wi-Fi (`rtw89_*`), ou se aparecer
+Se aparecer
 `rtw89 ... timed out to flush queues`:
 
 ```bash
@@ -294,6 +319,41 @@ sudo cp extras/wifi-rtw89/rtw89-stability.conf /etc/modprobe.d/ && sudo reboot
 ```
 
 ## Solução de problemas
+
+<a id="travamentos-totais"></a>
+<details open>
+<summary><b>Travamentos totais ao baixar ou salvar arquivos (Ubuntu 26.04)</b></summary>
+
+**Sintoma:** o notebook congela por inteiro (tela, teclado, SSH, SysRq) e o
+log simplesmente para. Acontece ao baixar ou salvar arquivos em apps
+**snap**, como Brave, Firefox e Discord, muitas vezes logo depois de abrir
+a janela de escolher pasta ou de responder a um pedido de permissão
+("Permitir que … acesse …?"). Pode aparecer antes um
+`WARNING: kernel/workqueue.c:2351`, sempre com uma função diferente.
+
+**Causa:** um bug do kernel 6.17+ / 7.0 no **pedido de permissão do
+AppArmor** dos snaps (*permission prompting*), que vem ligado no Ubuntu
+26.04. Não é hardware, driver NVIDIA, Wi-Fi, SSD, RAM nem este projeto.
+Neste notebook, a troca de kernel, de driver NVIDIA e de ajustes do Wi-Fi e
+do SSD não resolveu. Um teste de 15 min gravando ~8 GB no SSD não travou.
+O travamento veio ~1 s depois de responder a um pedido de permissão.
+Relatos: [Launchpad #2143937](https://bugs.launchpad.net/apparmor/+bug/2143937),
+[#2158994](https://bugs.launchpad.net/ubuntu/+source/linux/+bug/2158994),
+[Discourse do Ubuntu](https://discourse.ubuntu.com/t/screen-freezes-or-kernel-panics-after-enabling-permission-prompting-on-26-04/82666).
+
+**Solução:** salve o que estiver aberto e desligue o pedido de permissão em
+**Central de Segurança → Permissões de aplicativos**, ou pelo terminal:
+
+```bash
+sudo snap set system experimental.apparmor-prompting=false
+```
+
+Depois **reinicie**. Desligar o recurso reinicia o snapd, o que pode travar
+uma última vez. Os snaps continuam isolados pelo AppArmor; você só deixa de
+receber os pedidos de acesso. Para conferir, o log deve mostrar
+`the prompting feature is not enabled` no `prompting-client`. Religue quando
+sair um kernel com a correção.
+</details>
 
 <details>
 <summary><b>A tela azul do MOK passou direto / a chave não foi cadastrada</b></summary>

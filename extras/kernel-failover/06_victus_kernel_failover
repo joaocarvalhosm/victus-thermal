@@ -1,0 +1,41 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# /etc/grub.d/06_victus_kernel_failover (installed by
+# extras/kernel-failover/install.sh). Runs inside update-grub.
+#
+# Boots the newest *-generic kernel. If the previous boot never reached
+# boot-complete.target (panic, hang, power cut before login), Ubuntu's
+# "recordfail" flag is still set, and GRUB boots the newest *-oem kernel
+# instead. grub2-common.service clears the flag after every successful boot,
+# so the next boot goes back to the generic kernel.
+set -e
+
+newest() {
+	ls /boot/vmlinuz-*-"$1" 2>/dev/null | sed 's|^/boot/vmlinuz-||' | sort -V | tail -1
+}
+
+generic="$(newest generic)"
+oem="$(newest oem)"
+[ -n "${generic}" ] || exit 0
+
+uuid="$(grub-probe --device "${GRUB_DEVICE}" --target=fs_uuid 2>/dev/null || true)"
+[ -n "${uuid}" ] || exit 0
+
+entry() { echo "gnulinux-advanced-${uuid}>gnulinux-$1-advanced-${uuid}"; }
+
+echo "victus kernel failover: default ${generic}, fallback ${oem:-none}" >&2
+cat <<GRUB
+# victus-thermal kernel failover
+if [ -z "\${boot_once}" ]; then
+  set default="$(entry "${generic}")"
+GRUB
+if [ -n "${oem}" ]; then
+	cat <<GRUB
+  set fallback="$(entry "${oem}")"
+  if [ "\${recordfail}" = 1 ]; then
+    set default="$(entry "${oem}")"
+  fi
+GRUB
+fi
+echo "fi"

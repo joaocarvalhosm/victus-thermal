@@ -2,12 +2,21 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
-## [Não lançado]
+## [1.8.1] - 2026-10-16
 ### Adicionado
+- `extras/kernel-failover`: o kernel genérico mais novo é o padrão, e o
+  kernel OEM assume sozinho no boot seguinte a um boot que falhou (usa o
+  `recordfail` do GRUB do Ubuntu, que é apagado em todo boot completo).
 - `tools/workqueue-watch.sh`: serviço que liga o rastreamento do
   `workqueue.c:2351` em todo boot e grava a função culpada em
   `/var/log/victus-workqueue/` no instante do aviso. A ferramenta manual
   perdia o resultado no reinício forçado que sempre segue esse aviso.
+### Documentado
+- **Causa dos travamentos totais:** o pedido de permissão do AppArmor dos
+  snaps (bug do kernel 6.17+/7.0, LP #2143937), disparado ao baixar ou
+  salvar arquivos no Brave e no Firefox. Desligá-lo resolveu. O README
+  explica o sintoma e a solução. O hardware, o driver NVIDIA, o Wi-Fi, o SSD
+  e este projeto foram descartados.
 
 ## [1.8.0] - 2026-10-14
 ### Adicionado
