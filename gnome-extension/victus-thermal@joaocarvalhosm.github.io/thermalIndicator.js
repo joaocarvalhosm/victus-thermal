@@ -318,7 +318,8 @@ class VictusIndicator extends PanelMenu.Button {
                 return;
             Main.notifyError('Victus Thermal', e.message);
         }
-        this._refresh();
+        if (!this._cancellable.is_cancelled())
+            this._refresh();
     }
 
     async _readStatus() {
@@ -333,6 +334,8 @@ class VictusIndicator extends PanelMenu.Button {
     }
 
     async _refresh() {
+        if (this._cancellable.is_cancelled())
+            return;
         if (this._busy) {
             this._pending = true;   // coalesce bursts of file events
             return;
@@ -341,7 +344,11 @@ class VictusIndicator extends PanelMenu.Button {
         try {
             do {
                 this._pending = false;
-                this._update(await this._readStatus());
+                const status = await this._readStatus();
+                // the read can finish just before destroy() cancels it
+                if (this._cancellable.is_cancelled())
+                    return;
+                this._update(status);
             } while (this._pending);
         } catch {
             // cancelled: the indicator is being destroyed

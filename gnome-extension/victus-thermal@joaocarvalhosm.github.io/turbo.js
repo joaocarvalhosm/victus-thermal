@@ -117,6 +117,9 @@ export class TurboKey {
             const proc = Gio.Subprocess.new(['victusctl', 'turbo', 'toggle'],
                 Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
             const [stdout, stderr] = await proc.communicate_utf8_async(null, this._cancellable);
+            // victusctl can finish just before destroy() cancels the wait
+            if (this._cancellable.is_cancelled())
+                return;
             if (!proc.get_successful())
                 throw new Error(stderr?.trim() || 'victusctl turbo falhou');
             const on = stdout.includes('turbo: on');

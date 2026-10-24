@@ -2,6 +2,14 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [1.9.2] - 2026-10-24
+### Corrigido
+- **Extensão:** ao ser desligada (por exemplo, ao bloquear a tela), ela às
+  vezes ainda atualizava widgets já destruídos, deixando erros "has been
+  already disposed" no log. Uma leitura do status ou um `victusctl` que
+  terminava logo antes do cancelamento seguia em frente. Agora o indicador e
+  o botão turbo conferem se foram cancelados depois de cada espera.
+
 ## [1.9.1] - 2026-10-24
 ### Corrigido
 - **Kernel com failover:** o initrd do kernel genérico parava de ser

@@ -1,3 +1,3 @@
 """victus-thermal: OMEN-style thermal control for the HP Victus 15-fb2xxx."""
 
-__version__ = "1.9.1"
+__version__ = "1.9.2"
