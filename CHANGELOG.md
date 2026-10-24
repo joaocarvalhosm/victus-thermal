@@ -2,6 +2,19 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [1.9.1] - 2026-10-24
+### Corrigido
+- **Kernel com failover:** o initrd do kernel genérico parava de ser
+  atualizado. O `update-initramfs` só refaz o kernel "mais novo" pela
+  numeração, e o OEM (`7.0.0-1015`) fica acima do genérico (`7.0.0-38`).
+  O instalador agora grava `update_initramfs=all` e refaz todos os initrd.
+
+### Adicionado
+- `extras/kernel-failover/install.sh --status`: o GRUB anota a cada boot o
+  kernel que planejou subir (`victus_planned` no `grubenv`), e o `--status`
+  compara com o kernel em uso. Assim dá para distinguir um failover de uma
+  escolha no menu ou de um kernel que o GRUB não conseguiu carregar.
+
 ## [1.9.0] - 2026-10-16
 ### Adicionado
 - **Botão OMEN = turbo:** o botão OMEN (`KEY_PROG2`, "Launch2" no GNOME)

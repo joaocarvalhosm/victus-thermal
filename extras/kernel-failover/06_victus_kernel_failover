@@ -9,6 +9,10 @@
 # "recordfail" flag is still set, and GRUB boots the newest *-oem kernel
 # instead. grub2-common.service clears the flag after every successful boot,
 # so the next boot goes back to the generic kernel.
+#
+# GRUB also saves what it planned to boot in grubenv (victus_planned), so
+# `install.sh --status` can tell a failover apart from a manual choice or a
+# kernel that GRUB could not load.
 set -e
 
 newest() {
@@ -29,13 +33,20 @@ cat <<GRUB
 # victus-thermal kernel failover
 if [ -z "\${boot_once}" ]; then
   set default="$(entry "${generic}")"
+  set victus_planned="${generic}"
 GRUB
 if [ -n "${oem}" ]; then
 	cat <<GRUB
   set fallback="$(entry "${oem}")"
   if [ "\${recordfail}" = 1 ]; then
     set default="$(entry "${oem}")"
+    set victus_planned="${oem} failover"
   fi
 GRUB
 fi
-echo "fi"
+cat <<GRUB
+  if [ -n "\${have_grubenv}" ]; then
+    save_env victus_planned
+  fi
+fi
+GRUB

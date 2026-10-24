@@ -309,6 +309,7 @@ seguinte:
 sudo apt install linux-generic-hwe-26.04 linux-oem-26.04   # os dois atualizados
 sudo extras/kernel-failover/install.sh                     # instala
 sudo extras/kernel-failover/install.sh --uninstall         # desfaz
+extras/kernel-failover/install.sh --status                 # o que subiu, e por quê
 ```
 
 - Como funciona: o GRUB marca `recordfail` ao iniciar o kernel, e o Ubuntu
@@ -323,6 +324,20 @@ sudo extras/kernel-failover/install.sh --uninstall         # desfaz
   dois kernels.
 - Um travamento **depois** do login não troca o kernel. Esse é o comportamento
   certo, porque o kernel subiu sem problemas.
+- **Initrd de todos os kernels:** o `update-initramfs` só refaz o initrd do
+  kernel "mais novo" pela numeração, e `7.0.0-1015-oem` fica acima de
+  `7.0.0-38-generic`. Sem ajuste, cada atualização do systemd, udev ou
+  firmware deixava o initrd do genérico desatualizado. O instalador grava
+  `update_initramfs=all` em `/etc/initramfs-tools/update-initramfs.conf`
+  (lido pelo dracut do Ubuntu 26.04) e refaz todos na hora.
+- **O que o GRUB decidiu:** a cada boot, o GRUB anota em `grubenv` o kernel
+  que planejou (`victus_planned`). `--status` compara com o kernel que subiu:
+
+  | Resultado | Significa |
+  |---|---|
+  | `ok` | subiu o padrão (genérico) |
+  | `failover` | o boot anterior não terminou, e o GRUB usou o OEM |
+  | `GRUB planned another kernel` | o kernel foi escolhido no menu, ou o GRUB não conseguiu carregar o padrão e usou o reserva |
 
 ### Diagnóstico de congelamentos
 
