@@ -363,7 +363,7 @@ cmd_daemon() {
 	fi
 
 	install -d -m 0755 /usr/share/doc/victus-thermal
-	install -m 0644 "${HERE}/README.md" /usr/share/doc/victus-thermal/
+	install -m 0644 "${HERE}/README.md" "${HERE}/README.pt-BR.md" /usr/share/doc/victus-thermal/
 	install -m 0644 "${HERE}/packaging/victus-thermal.tmpfiles" /usr/lib/tmpfiles.d/victus-thermal.conf
 	install -m 0644 "${HERE}/packaging/victus-thermal.service" /etc/systemd/system/
 	local tmpfiles=(/usr/lib/tmpfiles.d/victus-thermal.conf)

@@ -2,6 +2,15 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [Não lançado]
+### Documentação
+- README e guia técnico em inglês (`README.md`, `docs/HOW-IT-WORKS.md`) e
+  em português (`README.pt-BR.md`, `docs/HOW-IT-WORKS.pt-BR.md`), com um
+  seletor de idioma no topo de cada um. O instalador copia os dois READMEs
+  para `/usr/share/doc/victus-thermal/`.
+- O README mostrava a versão 1.9.0, o número antigo de testes e o texto
+  errado do aviso de serviço parado.
+
 ## [1.9.2] - 2026-10-24
 ### Corrigido
 - **Extensão:** ao ser desligada (por exemplo, ao bloquear a tela), ela às

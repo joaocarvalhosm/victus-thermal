@@ -1,87 +1,90 @@
 # victus-thermal
 
-**Controle térmico no estilo OMEN Gaming Hub para o HP Victus 15-fb2xxx no Linux.**
+**English** | [Português](README.pt-BR.md)
 
-Modos térmicos reais da HP, curvas de ventoinha por perfil, proteção de
-emergência, indicador na barra do GNOME e NVIDIA só sob demanda, com
-Secure Boot ligado.
+**OMEN Gaming Hub-style thermal control for the HP Victus 15-fb2xxx on Linux.**
+
+The real HP thermal modes, a fan curve per profile, emergency protection, an
+indicator in the GNOME top bar and an NVIDIA GPU that only turns on when
+needed, all with Secure Boot on.
 
 | | |
 |---|---|
-| **Notebook** | HP Victus 15-fb2xxx, placa **8C2F** (Ryzen 5 8645HS + RTX 4050) |
-| **Sistema** | Ubuntu 26.04, kernel 7.0.x, GNOME 50 (Wayland), Secure Boot ligado |
-| **Versão** | 1.9.0, veja o [CHANGELOG](CHANGELOG.md) |
+| **Laptop** | HP Victus 15-fb2xxx, board **8C2F** (Ryzen 5 8645HS + RTX 4050) |
+| **System** | Ubuntu 26.04, kernel 7.0.x, GNOME 50 (Wayland), Secure Boot on |
+| **Version** | 1.9.2, see the [CHANGELOG](CHANGELOG.md) (in Portuguese) |
+| **Interface language** | Brazilian Portuguese |
 
 ---
 
-## Sumário
+## Contents
 
-- [Por que existe](#por-que-existe)
-- [O que você ganha](#o-que-você-ganha)
-- [Instalação](#instalação)
-- [Uso no dia a dia](#uso-no-dia-a-dia)
-- [Como as ventoinhas se comportam](#como-as-ventoinhas-se-comportam)
-- [Configuração](#configuração)
-- [Segurança](#segurança)
-- [Extras opcionais](#extras-opcionais)
-- [Solução de problemas](#solução-de-problemas)
-- [Atualizar e desinstalar](#atualizar-e-desinstalar)
-- [Desenvolvimento](#desenvolvimento)
-- [Licença e créditos](#licença-e-créditos)
+- [Why it exists](#why-it-exists)
+- [What you get](#what-you-get)
+- [Installation](#installation)
+- [Everyday use](#everyday-use)
+- [How the fans behave](#how-the-fans-behave)
+- [Configuration](#configuration)
+- [Security](#security)
+- [Optional extras](#optional-extras)
+- [Troubleshooting](#troubleshooting)
+- [Updating and uninstalling](#updating-and-uninstalling)
+- [Development](#development)
+- [License and credits](#license-and-credits)
 
 ---
 
-## Por que existe
+## Why it exists
 
-O driver `hp-wmi` do Linux só ativa o controle térmico da HP em placas que
-estão numa lista interna, e **a 8C2F não está nela**: nem no Ubuntu, nem no
-kernel oficial. Sem isso:
+The Linux `hp-wmi` driver only turns on HP thermal control for boards on an
+internal list, and **8C2F is not on it**, neither in Ubuntu nor in the
+mainline kernel. Without it:
 
-- os modos térmicos da HP (o que o OMEN controla no Windows) nunca são
-  ativados. O "Desempenho" do GNOME só mexe na CPU;
-- o firmware fica na curva de ventoinha mais conservadora. Num teste de
-  carga, **a CPU chegou a 100 °C com as ventoinhas paradas por 30 s**;
-- o driver NVIDIA não consegue ler da BIOS a temperatura-alvo nem o modo de
-  energia (`failed to get target temp from SBIOS`).
+- the HP thermal modes (what OMEN controls on Windows) are never turned on.
+  GNOME's "Performance" only changes the CPU settings;
+- the firmware stays on its most conservative fan curve. In a load test,
+  **the CPU reached 100 °C with the fans stopped for 30 s**;
+- the NVIDIA driver cannot read the target temperature or the power mode
+  from the BIOS (`failed to get target temp from SBIOS`).
 
-Este projeto corrige isso na raiz e acrescenta o que o OMEN fazia.
+This project fixes the root cause and adds what OMEN used to do.
 
-## O que você ganha
+## What you get
 
-- 🌡️ **Modos térmicos reais da HP** ligados ao modo de energia do GNOME
-  (Economia, Equilibrado, Desempenho), incluindo o boost da GPU.
-- 🌀 **Curva de ventoinha por perfil**, com firmware HP em carga leve, filtro de
-  picos e tempo mínimo ligado. Sem o "liga-desliga" brusco.
-- 🔌 **Silencioso contínuo na tomada:** as ventoinhas nunca param enquanto
-  carrega.
-- 🚨 **Emergência:** qualquer sensor ≥ 95 °C põe as ventoinhas no máximo, em
-  qualquer modo.
-- 🖥️ **Indicador na barra do GNOME:** temperatura, RPM e controles, com
-  atualização instantânea.
-- 🚀 **Botão OMEN = turbo:** um toque põe o perfil Desempenho com as
-  ventoinhas no máximo, e outro toque volta ao normal.
-- 🎮 **NVIDIA só sob demanda:** a RTX desliga quando ninguém usa, e os jogos
-  continuam abrindo nela.
-- 🔐 **Secure Boot ligado:** o driver é assinado com a sua chave (MOK) e
-  recompilado sozinho a cada atualização do kernel 7.0.x.
+- 🌡️ **Real HP thermal modes** tied to the GNOME power mode (Power Saver,
+  Balanced, Performance), including the GPU boost.
+- 🌀 **A fan curve per profile**, with the HP firmware in charge under light
+  load, a spike filter and a minimum on-time. No abrupt on-off cycling.
+- 🔌 **Continuous quiet mode on AC power:** the fans never stop while the
+  laptop is charging.
+- 🚨 **Emergency:** any sensor at 95 °C or more puts the fans at full speed,
+  in any mode.
+- 🖥️ **GNOME top bar indicator:** temperature, RPM and controls, updated
+  instantly.
+- 🚀 **OMEN key = turbo:** one press switches to the Performance profile
+  with the fans at full speed, and another press goes back to normal.
+- 🎮 **NVIDIA only on demand:** the RTX turns off when nothing is using it,
+  and games still open on it.
+- 🔐 **Secure Boot on:** the driver is signed with your own key (MOK) and
+  rebuilt automatically on every 7.0.x kernel update.
 
 ```mermaid
 flowchart LR
-    GNOME["Modo de energia do GNOME"] --> PPD["power-profiles-daemon"]
+    GNOME["GNOME power mode"] --> PPD["power-profiles-daemon"]
     PPD --> PP["platform_profile"]
-    PP --> DRV["hp-wmi corrigido (DKMS)"]
-    DRV -- "WMI" --> BIOS["BIOS / firmware HP"]
-    D["victus-thermald"] -- "lê temperaturas e perfil" --> PP
+    PP --> DRV["patched hp-wmi (DKMS)"]
+    DRV -- "WMI" --> BIOS["HP BIOS / firmware"]
+    D["victus-thermald"] -- "reads temperatures and profile" --> PP
     D -- "pwm1 / pwm1_enable" --> DRV
-    D -- "status.json" --> EXT["Extensão GNOME"]
+    D -- "status.json" --> EXT["GNOME extension"]
     D -- "status.json" --> CLI["victusctl"]
     EXT -- "victusctl" --> D
 ```
 
-## Instalação
+## Installation
 
-> Use um **terminal normal** (Ctrl+Alt+T). O `sudo` e a criação da chave
-> pedem senha, e isso não funciona pelo `!` do Claude Code.
+> Use a **regular terminal** (Ctrl+Alt+T). `sudo` and the key creation ask
+> for a password, which does not work through Claude Code's `!` prefix.
 
 ```bash
 git clone git@github.com:joaocarvalhosm/victus-thermal.git ~/Projects/victus-thermal
@@ -89,408 +92,420 @@ cd ~/Projects/victus-thermal
 sudo ./install.sh all
 ```
 
-**Primeira vez:** o `all` cria a chave de assinatura e **para**, pedindo uma
-senha. Então:
+**First time:** `all` creates the signing key and **stops**, asking for a
+password. Then:
 
-1. Reinicie (`sudo reboot`).
-2. Quando aparecer a tela azul *"Press any key to perform MOK management"*,
-   **aperte uma tecla em até 10 segundos**.
-3. **Enroll MOK** → **Continue** → **Yes** → digite a senha → **Reboot**.
-4. Rode de novo: `sudo ./install.sh all`.
-5. **Saia e entre de novo na sessão** para o GNOME carregar a extensão.
+1. Reboot (`sudo reboot`).
+2. When the blue screen *"Press any key to perform MOK management"* shows up,
+   **press a key within 10 seconds**.
+3. **Enroll MOK** → **Continue** → **Yes** → type the password → **Reboot**.
+4. Run it again: `sudo ./install.sh all`.
+5. **Log out and back in** so GNOME loads the extension.
 
-O `all` testa o driver antes de instalá-lo: ele é carregado só até o próximo
-reboot, e se algo falhar o instalador **volta sozinho ao driver original**,
-sem deixar nada instalado. Os passos também podem ser rodados um a um:
+`all` tests the driver before installing it: the driver is only loaded until
+the next reboot, and if anything fails the installer **goes back to the
+original driver on its own**, leaving nothing installed. The steps can also
+be run one at a time:
 
-| Comando | O que faz |
+| Command | What it does |
 |---|---|
-| `sudo ./install.sh check` | confere placa, kernel, Python e Secure Boot |
-| `sudo ./install.sh deps` | instala `dkms` e as ferramentas de build |
-| `sudo ./install.sh mok` | cria a chave de assinatura e pede o cadastro |
-| `sudo ./install.sh driver-test` | carrega o driver corrigido até o próximo reboot |
-| `sudo ./install.sh driver-install` | instala o driver de vez (DKMS) |
-| `sudo ./install.sh daemon` | instala e liga o serviço de ventoinhas |
-| `sudo ./install.sh extension` | instala a extensão do GNOME para você |
+| `sudo ./install.sh check` | checks the board, kernel, Python and Secure Boot |
+| `sudo ./install.sh deps` | installs `dkms` and the build tools |
+| `sudo ./install.sh mok` | creates the signing key and asks you to enroll it |
+| `sudo ./install.sh driver-test` | loads the patched driver until the next reboot |
+| `sudo ./install.sh driver-install` | installs the driver for good (DKMS) |
+| `sudo ./install.sh daemon` | installs and starts the fan service |
+| `sudo ./install.sh extension` | installs the GNOME extension for your user |
 
-## Uso no dia a dia
+## Everyday use
 
-**O modo de energia do GNOME é o perfil.** No menu do canto superior direito,
-Economia, Equilibrado e Desempenho ativam o modo térmico da HP e a curva de
-ventoinha correspondente.
+**The GNOME power mode is the profile.** In the menu at the top right,
+Power Saver, Balanced and Performance turn on the matching HP thermal mode
+and fan curve.
 
-> **Para jogar:** carregador ligado + **Desempenho**.
+> **For gaming:** charger plugged in + **Performance**.
 
-### Extensão da barra
+### Top bar extension
+
+The extension's interface is in Brazilian Portuguese:
 
 ```
- 🌀 61°                       ← na barra: sensor mais quente
+ 🌀 61°                       ← in the top bar: hottest sensor
 ┌──────────────────────────────────────┐
-│ 🌀  61 °C                             │  laranja ≥ 80 °C, vermelho ≥ 90 °C
-│     Equilibrado · Na tomada          │
+│ 🌀  61 °C                             │  orange ≥ 80 °C, red ≥ 90 °C
+│     Equilibrado · Na tomada          │  (Balanced · On AC power)
 ├──────────────────────────────────────┤
 │ CPU                          61 °C   │
-│ GPU NVIDIA                Desligada  │
-│ GPU integrada                55 °C   │
-│ Ventoinhas         2400 · 2600 RPM   │
-│ Curva: 31% a 61 °C                   │
+│ GPU NVIDIA                Desligada  │  (Off)
+│ GPU integrada                55 °C   │  (integrated GPU)
+│ Ventoinhas         2400 · 2600 RPM   │  (Fans)
+│ Curva: 31% a 61 °C                   │  (Curve: 31% at 61 °C)
 ├──────────────────────────────────────┤
-│ ⚡ Modo de energia     Equilibrado ›  │  submenus, como no menu do GNOME
+│ ⚡ Modo de energia     Equilibrado ›  │  submenus, as in the GNOME menu
 │ 🌀 Ventoinhas           Automático ›  │
-│ Silencioso na tomada           [on]  │
+│ Silencioso na tomada           [on]  │  (quiet on AC power)
 └──────────────────────────────────────┘
 ```
 
-Se o serviço estiver parado, o menu mostra **Iniciar serviço**, que pede a
-senha na janela do GNOME.
+If the service is stopped, the menu shows **Iniciar serviço** ("Start
+service"), which asks for your password in the GNOME dialog.
 
-### Luz do teclado
+### Keyboard light
 
-> **Não disponível no Victus 15-fb2xxx (8C2F).** Neste modelo, o teclado
-> branco só responde ao atalho Fn: a BIOS informa que a luz não é controlável
-> pelo sistema, e o botão abaixo não aparece. O suporte fica para modelos em
-> que a BIOS informa o contrário.
+> **Not available on the Victus 15-fb2xxx (8C2F).** On this model, the white
+> keyboard light only responds to the Fn shortcut: the BIOS reports that the
+> light cannot be controlled by the system, so the button below does not
+> show up. Support is kept for models whose BIOS reports otherwise.
 
-Quando a luz é controlável, aparece nas **configurações rápidas** do GNOME
-(canto superior direito) o botão **Luz do teclado**:
+When the light can be controlled, a **Luz do teclado** ("Keyboard light")
+button shows up in the GNOME **quick settings** (top right):
 
-- **ligado:** a luz apaga depois do tempo escolhido sem usar teclado e mouse
-  (seta ao lado: 30 s, 1 min, 2 min ou 5 min) e acende assim que você volta;
-- **desligado:** a luz fica como você deixou.
+- **on:** the light turns off after the chosen time without keyboard or
+  mouse input (arrow next to it: 30 s, 1 min, 2 min or 5 min) and turns back
+  on as soon as you come back;
+- **off:** the light stays as you left it.
 
-Ela também apaga sozinha quando a tela apaga, ao fechar a tampa e ao
-suspender (isso é do próprio GNOME). Se você apagar a luz pelo atalho Fn, ela
-nunca é acesa de volta automaticamente.
+It also turns off by itself when the screen turns off, when you close the
+lid and when the laptop suspends (that part is GNOME's own behaviour). If you
+turn the light off with the Fn shortcut, it is never turned back on
+automatically.
 
-### Modos das ventoinhas
+### Fan modes
 
-| Modo das ventoinhas | Quando usar |
+| Fan mode | When to use it |
 |---|---|
-| **Automático** (recomendado) | sempre. Firmware HP em carga leve, curva quando esquenta |
-| **Somente firmware HP** | comparar com o comportamento de fábrica |
-| **Máximo** | resfriar rápido. Só no perfil **Desempenho** |
+| **Automático** (Automatic, recommended) | always. HP firmware under light load, the curve when it gets hot |
+| **Somente firmware HP** (HP firmware only) | to compare with the factory behaviour |
+| **Máximo** (Maximum) | to cool down fast. Only in the **Performance** profile |
 
-O modo forçado volta para Automático ao reiniciar.
+A forced mode goes back to Automatic on reboot.
 
-### Botão OMEN: turbo
+### OMEN key: turbo
 
-O botão **OMEN** do teclado, que no Windows abria o OMEN Gaming Hub, liga e
-desliga o **turbo**:
+The **OMEN** key on the keyboard, which opened the OMEN Gaming Hub on
+Windows, turns **turbo** on and off:
 
-| Toque | O que acontece |
+| Press | What happens |
 |---|---|
-| 1º | Perfil **Desempenho** (CPU e RTX com mais potência) e ventoinhas no **Máximo** |
-| 2º | Volta para **Equilibrado** com as ventoinhas no **Automático** |
+| 1st | **Performance** profile (more power for the CPU and the RTX) and fans at **Maximum** |
+| 2nd | Back to **Balanced** with the fans on **Automatic** |
 
-- **Aviso:** "Turbo ligado" ou "Turbo desligado" aparece no alto e no centro
-  da tela, onde o GNOME mostra as notificações, e some depois de 2,5 s.
-- **Ventoinha da barra:** ao ligar, ela gira por 8 s, começando devagar e
-  acelerando, e para na posição original. Enquanto o turbo estiver ligado,
-  fica na cor de destaque do tema. Se o turbo desligar no meio do giro, ela
-  freia suavemente.
-- **Quando os avisos aparecem:** 0,3 s depois da troca, quando o GNOME já
-  colocou ou tirou o ícone de Desempenho dele na barra.
-- **Sincronia:** o menu de energia do GNOME e a extensão mostram a troca na
-  hora. Mudar o perfil por outro caminho também encerra o Máximo, como sempre.
-- **Uso:** o turbo é para uso **na tomada**. O Máximo é barulhento, e o
-  Desempenho gasta a bateria rápido.
-- **Jogos:** já abrem na RTX pelo extra
-  [NVIDIA só sob demanda](#nvidia-só-sob-demanda).
+- **Notice:** "Turbo ligado" or "Turbo desligado" ("Turbo on" / "Turbo
+  off") shows up at the top centre of the screen, where GNOME shows
+  notifications, and disappears after 2.5 s.
+- **Top bar fan:** when turbo turns on, the fan icon spins for 8 s, starting
+  slowly and speeding up, and stops at its original position. While turbo is
+  on, it uses the theme's accent colour. If turbo turns off mid-spin, it
+  slows down smoothly.
+- **When the notices show up:** 0.3 s after the switch, once GNOME has added
+  or removed its own Performance icon in the top bar.
+- **In sync:** the GNOME power menu and the extension show the switch right
+  away. Changing the profile any other way also ends Maximum, as always.
+- **Usage:** turbo is meant for **AC power**. Maximum is loud, and
+  Performance drains the battery fast.
+- **Games:** they already open on the RTX through the
+  [NVIDIA only on demand](#nvidia-only-on-demand) extra.
 
-Para usar outra tecla:
+To use another key:
 `gsettings --schemadir ~/.local/share/gnome-shell/extensions/victus-thermal@joaocarvalhosm.github.io/schemas set org.gnome.shell.extensions.victus-thermal turbo-shortcut "['<Super>t']"`.
-O padrão é `['Launch2']`, que é o botão OMEN.
+The default is `['Launch2']`, which is the OMEN key.
 
 ### Terminal
 
 ```bash
-victusctl status                 # temperaturas, RPM, decisão atual
+victusctl status                 # temperatures, RPM, current decision
 victusctl profile performance    # low-power | balanced | performance
 victusctl mode max               # curve | auto | max
-victusctl ac-quiet off           # silencioso contínuo na tomada: on | off
-victusctl turbo toggle           # o mesmo que o botão OMEN: on | off | toggle
+victusctl ac-quiet off           # continuous quiet mode on AC power: on | off
+victusctl turbo toggle           # same as the OMEN key: on | off | toggle
 ```
 
-## Como as ventoinhas se comportam
+## How the fans behave
 
-| Situação | O que acontece |
+| Situation | What happens |
 |---|---|
-| **Ligando o notebook** (primeiros 90 s do serviço) | firmware HP no controle, como antes do login |
-| Frio, **na bateria** | firmware HP no controle; as ventoinhas podem parar (silêncio) |
-| Frio, **na tomada** | rotação mínima contínua (*silencioso contínuo na tomada*) |
-| Pico rápido de temperatura | ignorado: a temperatura é suavizada (~7 s) |
-| Calor sustentado (≥ 6 s) | a curva do perfil assume, **nunca mais devagar** que o firmware estava |
-| Esfriou | mantém velocidade baixa por 90 s, depois devolve ao firmware |
-| Qualquer sensor ≥ 95 °C | **máximo**, em qualquer modo, até tudo voltar a ≤ 85 °C |
+| **Booting** (first 90 s of the service) | HP firmware in charge, as before login |
+| Cool, **on battery** | HP firmware in charge; the fans may stop (silence) |
+| Cool, **on AC power** | continuous minimum speed (*continuous quiet mode on AC power*) |
+| Quick temperature spike | ignored: the temperature is smoothed (~7 s) |
+| Sustained heat (≥ 6 s) | the profile's curve takes over, **never slower** than the firmware was |
+| Cooled down | keeps a low speed for 90 s, then hands back to the firmware |
+| Any sensor ≥ 95 °C | **maximum**, in any mode, until everything is back to ≤ 85 °C |
 
-As duas ventoinhas (CPU e GPU) têm tamanhos e rotações máximas diferentes,
-então é normal mostrarem RPMs diferentes.
+The two fans (CPU and GPU) have different sizes and top speeds, so it is
+normal for them to show different RPMs.
 
-Curvas padrão (`[temperatura °C, ventoinha %]`; 0 % = firmware decide,
-100 % = máximo):
+Default curves (`[temperature °C, fan %]`; 0 % = the firmware decides,
+100 % = maximum):
 
-| Perfil | Curva |
+| Profile | Curve |
 |---|---|
-| Economia | 58→0 · 60→20 · 70→30 · 80→55 · 90→80 · 95→100 |
-| Equilibrado | 52→0 · 55→25 · 65→35 · 75→55 · 85→80 · 90→100 |
-| Desempenho | 50→0 · 52→35 · 60→45 · 70→65 · 80→85 · 85→100 |
+| Power Saver | 58→0 · 60→20 · 70→30 · 80→55 · 90→80 · 95→100 |
+| Balanced | 52→0 · 55→25 · 65→35 · 75→55 · 85→80 · 90→100 |
+| Performance | 50→0 · 52→35 · 60→45 · 70→65 · 80→85 · 85→100 |
 
-## Configuração
+## Configuration
 
-Arquivo: `/etc/victus-thermal/config.toml` (editar com `sudo`). As mudanças
-valem em até 2 s. Um arquivo inválido é **recusado por inteiro**: o motivo vai
-para `journalctl -u victus-thermal`, e os valores padrão continuam valendo.
+File: `/etc/victus-thermal/config.toml` (edit it with `sudo`). Changes take
+effect within 2 s. An invalid file is **rejected as a whole**: the reason
+goes to `journalctl -u victus-thermal`, and the default values stay in
+effect.
 
-| Opção | Padrão | O que faz |
+| Option | Default | What it does |
 |---|---|---|
-| `poll_interval` | `2.0` | segundos entre decisões |
-| `emergency_temp` / `emergency_release` | `95` / `85` | liga e desliga a emergência |
-| `hysteresis` | `4.0` | °C que a temperatura precisa cair antes de reduzir as ventoinhas |
-| `smoothing` | `0.25` | suavização da temperatura (1 = sem suavizar) |
-| `engage_delay` | `6.0` | segundos de calor contínuo antes de a curva assumir |
-| `hold_time` | `90.0` | segundos em velocidade baixa antes de devolver ao firmware |
-| `startup_grace` | `90.0` | segundos com o firmware HP no controle depois que o serviço inicia (boot) |
-| `ac_quiet` / `ac_quiet_duty` | `true` / `15` | silencioso contínuo na tomada e sua velocidade |
-| `max_profiles` | `["performance"]` | perfis em que o modo Máximo é permitido |
-| `[curves]` | acima | uma curva por perfil, ou `"firmware"` para deixar o perfil só com a HP |
+| `poll_interval` | `2.0` | seconds between decisions |
+| `emergency_temp` / `emergency_release` | `95` / `85` | turns the emergency on and off |
+| `hysteresis` | `4.0` | °C the temperature must drop before the fans slow down |
+| `smoothing` | `0.25` | temperature smoothing (1 = no smoothing) |
+| `engage_delay` | `6.0` | seconds of continuous heat before the curve takes over |
+| `hold_time` | `90.0` | seconds at low speed before handing back to the firmware |
+| `startup_grace` | `90.0` | seconds with the HP firmware in charge after the service starts (boot) |
+| `ac_quiet` / `ac_quiet_duty` | `true` / `15` | continuous quiet mode on AC power and its speed |
+| `max_profiles` | `["performance"]` | profiles where Maximum mode is allowed |
+| `[curves]` | above | one curve per profile, or `"firmware"` to leave that profile to HP alone |
 
-O instalador só atualiza o `config.toml` se você não o tiver editado.
+The installer only updates `config.toml` if you have not edited it.
 
-## Segurança
+## Security
 
-- **Emergência sem exceções:** ≥ 95 °C em qualquer sensor põe as ventoinhas no
-  máximo, ignorando qualquer modo, perfil ou configuração.
-- **Na dúvida, o firmware manda:** sensor de CPU ilegível, serviço parado,
-  travado ou morto: as ventoinhas voltam ao firmware HP. O próprio serviço faz
-  isso ao sair; o `ExecStopPost` cobre `SIGKILL` e falta de memória; o
-  watchdog de 30 s do systemd mata um serviço travado.
-- **Sem acesso direto ao controlador:** o patch só usa métodos WMI que a
-  própria BIOS implementa e valida (`HP_EC_OFFSET_UNKNOWN`).
-- **Kernel fora da série 7.0:** o DKMS não compila, e o driver original do
-  Ubuntu continua funcionando.
-- **Privilégios mínimos:** o serviço roda como root sem nenhuma *capability*,
-  com sandbox do systemd. O `victusctl` e a extensão rodam como usuário comum.
-  Os pedidos de modo e a preferência da tomada só podem ser gravados pelo
-  grupo `victus-thermal` e por quem instalou; são lidos sem seguir links
-  simbólicos e só aceitos se forem uma palavra conhecida.
-- **Leve:** cada leitura de RPM custa ~310 ms de BIOS, por isso é feita a cada
-  10 s. O serviço usa ~1% de CPU e nunca mantém a NVIDIA acordada.
+- **Emergency with no exceptions:** 95 °C or more on any sensor puts the fans
+  at full speed, overriding any mode, profile or setting.
+- **When in doubt, the firmware is in charge:** if the CPU sensor cannot be
+  read, or the service is stopped, stuck or killed, the fans go back to the
+  HP firmware. The service does this itself when it exits; `ExecStopPost`
+  covers `SIGKILL` and out-of-memory kills; the 30 s systemd watchdog kills
+  a stuck service.
+- **No direct access to the controller:** the patch only uses WMI methods
+  that the BIOS itself implements and validates (`HP_EC_OFFSET_UNKNOWN`).
+- **Kernel outside the 7.0 series:** DKMS does not build the driver, and
+  Ubuntu's original driver keeps working.
+- **Least privilege:** the service runs as root with no *capabilities*,
+  inside a systemd sandbox. `victusctl` and the extension run as a regular
+  user. Mode requests and the AC power preference can only be written by the
+  `victus-thermal` group and by the user who installed it; they are read
+  without following symbolic links and only accepted if they are a known
+  word.
+- **Lightweight:** each RPM reading costs ~310 ms of BIOS time, so it is done
+  every 10 s. The service uses ~1% CPU and never keeps the NVIDIA GPU awake.
 
-Detalhes técnicos: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
+Technical details: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
-## Extras opcionais
+## Optional extras
 
-### NVIDIA só sob demanda
+### NVIDIA only on demand
 
-Qualquer app Vulkan, inclusive apps GTK4 como o terminal, carrega o driver da
-NVIDIA ao abrir, e isso mantém a RTX ligada (~2 W) mesmo sem uso.
+Any Vulkan app, including GTK4 apps such as the terminal, loads the NVIDIA
+driver when it opens, which keeps the RTX on (~2 W) even when it is not in
+use.
 
 ```bash
-extras/gpu-on-demand/install.sh              # sem sudo; vale no próximo login
-extras/gpu-on-demand/install.sh --uninstall  # desfaz
+extras/gpu-on-demand/install.sh              # no sudo; takes effect on next login
+extras/gpu-on-demand/install.sh --uninstall  # undoes it
 ```
 
-- Os apps comuns passam a usar a AMD integrada, e a NVIDIA pode desligar.
-- Steam, Lutris, Heroic, Bottles e TLauncher abrem **na NVIDIA**
-  automaticamente, e os jogos herdam isso.
-- Qualquer outro app: clique direito no ícone → *Iniciar usando placa de vídeo
-  dedicada*.
-- Para conferir: `nvtop`, ou
+- Regular apps use the integrated AMD GPU, so the NVIDIA GPU can turn off.
+- Steam, Lutris, Heroic, Bottles and TLauncher open **on the NVIDIA GPU**
+  automatically, and games inherit that.
+- Any other app: right-click its icon → *Launch using Discrete Graphics
+  Card*.
+- To check: `nvtop`, or
   `cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status`
-  (`suspended` = desligada).
+  (`suspended` = off).
 
-### Kernel com failover
+### Kernel failover
 
-Usa o kernel **genérico mais novo** (o padrão do Ubuntu, que recebe mais
-atualizações) e, se um boot falhar, entra **sozinho no kernel OEM** no boot
-seguinte:
+Uses the **newest generic kernel** (Ubuntu's default, which gets more
+updates) and, if a boot fails, **automatically boots the OEM kernel** the
+next time:
 
 ```bash
-sudo apt install linux-generic-hwe-26.04 linux-oem-26.04   # os dois atualizados
-sudo extras/kernel-failover/install.sh                     # instala
-sudo extras/kernel-failover/install.sh --uninstall         # desfaz
-extras/kernel-failover/install.sh --status                 # o que subiu, e por quê
+sudo apt install linux-generic-hwe-26.04 linux-oem-26.04   # keeps both up to date
+sudo extras/kernel-failover/install.sh                     # installs
+sudo extras/kernel-failover/install.sh --uninstall         # undoes it
+extras/kernel-failover/install.sh --status                 # what booted, and why
 ```
 
-- Como funciona: o GRUB marca `recordfail` ao iniciar o kernel, e o Ubuntu
-  apaga a marca quando o boot termina (`grub2-common.service`). Se a marca
-  continuar lá, o boot anterior falhou (pânico, travamento ou desligamento
-  antes do login). O GRUB então mostra o menu por 10 s e escolhe o kernel
-  OEM.
-- Um boot bom no OEM apaga a marca, e o boot seguinte volta ao genérico.
-- As versões são lidas a cada `update-grub`, que roda em toda atualização de
-  kernel. Não é preciso mexer em nada quando sai um kernel novo.
-- O driver das ventoinhas (DKMS) e os módulos NVIDIA são instalados para os
-  dois kernels.
-- Um travamento **depois** do login não troca o kernel. Esse é o comportamento
-  certo, porque o kernel subiu sem problemas.
-- **Initrd de todos os kernels:** o `update-initramfs` só refaz o initrd do
-  kernel "mais novo" pela numeração, e `7.0.0-1015-oem` fica acima de
-  `7.0.0-38-generic`. Sem ajuste, cada atualização do systemd, udev ou
-  firmware deixava o initrd do genérico desatualizado. O instalador grava
-  `update_initramfs=all` em `/etc/initramfs-tools/update-initramfs.conf`
-  (lido pelo dracut do Ubuntu 26.04) e refaz todos na hora.
-- **O que o GRUB decidiu:** a cada boot, o GRUB anota em `grubenv` o kernel
-  que planejou (`victus_planned`). `--status` compara com o kernel que subiu:
+- How it works: GRUB sets `recordfail` when it starts the kernel, and Ubuntu
+  clears the flag when the boot finishes (`grub2-common.service`). If the
+  flag is still there, the previous boot failed (panic, freeze or power-off
+  before login). GRUB then shows the menu for 10 s and picks the OEM kernel.
+- A good boot on the OEM kernel clears the flag, and the next boot goes back
+  to the generic one.
+- The versions are read on every `update-grub`, which runs on every kernel
+  update. Nothing needs to change when a new kernel comes out.
+- The fan driver (DKMS) and the NVIDIA modules are installed for both
+  kernels.
+- A freeze **after** login does not switch the kernel. That is the right
+  behaviour, because the kernel booted fine.
+- **Initrd for every kernel:** `update-initramfs` only rebuilds the initrd of
+  the "newest" kernel by version number, and `7.0.0-1015-oem` sorts above
+  `7.0.0-38-generic`. Without a fix, every systemd, udev or firmware update
+  left the generic kernel's initrd out of date. The installer writes
+  `update_initramfs=all` to `/etc/initramfs-tools/update-initramfs.conf`
+  (read by Ubuntu 26.04's dracut) and rebuilds all of them right away.
+- **What GRUB decided:** on every boot, GRUB writes the kernel it planned to
+  boot to `grubenv` (`victus_planned`). `--status` compares it with the
+  kernel that actually booted:
 
-  | Resultado | Significa |
+  | Result | Meaning |
   |---|---|
-  | `ok` | subiu o padrão (genérico) |
-  | `failover` | o boot anterior não terminou, e o GRUB usou o OEM |
-  | `GRUB planned another kernel` | o kernel foi escolhido no menu, ou o GRUB não conseguiu carregar o padrão e usou o reserva |
+  | `ok` | the default (generic) kernel booted |
+  | `failover` | the previous boot did not finish, and GRUB used the OEM kernel |
+  | `GRUB planned another kernel` | the kernel was picked in the menu, or GRUB could not load the default one and used the fallback |
 
-### Diagnóstico de congelamentos
+### Freeze diagnostics
 
-Se o aviso `WARNING: kernel/workqueue.c:2351` aparecer no log, o vigia abaixo
-liga o rastreamento em todo boot. No instante do aviso, ele grava em disco a
-função (e o driver) responsável, antes de um possível travamento:
+If the warning `WARNING: kernel/workqueue.c:2351` shows up in the log, the
+watcher below turns on tracing at every boot. The moment the warning
+happens, it writes the responsible function (and driver) to disk, before a
+possible freeze:
 
 ```bash
-sudo tools/workqueue-watch.sh install     # liga agora e em todo boot
-sudo tools/workqueue-watch.sh report      # mostra o que foi capturado
-sudo tools/workqueue-watch.sh uninstall   # desliga
+sudo tools/workqueue-watch.sh install     # turns it on now and at every boot
+sudo tools/workqueue-watch.sh report      # shows what was captured
+sudo tools/workqueue-watch.sh uninstall   # turns it off
 ```
 
-As capturas ficam em `/var/log/victus-workqueue/`.
-`tools/catch-workqueue-warning.sh` faz o mesmo de forma manual, só até o
-próximo reboot. Antes de usar, veja
-[Travamentos totais ao baixar ou salvar arquivos](#travamentos-totais).
+The captures go to `/var/log/victus-workqueue/`.
+`tools/catch-workqueue-warning.sh` does the same manually, only until the
+next reboot. Before using it, see
+[Full freezes when downloading or saving files](#full-freezes).
 
-### Wi-Fi Realtek 8852BE
+### Realtek 8852BE Wi-Fi
 
-Se aparecer
+If you see
 `rtw89 ... timed out to flush queues`:
 
 ```bash
 sudo cp extras/wifi-rtw89/rtw89-stability.conf /etc/modprobe.d/ && sudo reboot
 ```
 
-## Solução de problemas
+## Troubleshooting
 
-<a id="travamentos-totais"></a>
+<a id="full-freezes"></a>
 <details open>
-<summary><b>Travamentos totais ao baixar ou salvar arquivos (Ubuntu 26.04)</b></summary>
+<summary><b>Full freezes when downloading or saving files (Ubuntu 26.04)</b></summary>
 
-**Sintoma:** o notebook congela por inteiro (tela, teclado, SSH, SysRq) e o
-log simplesmente para. Acontece ao baixar ou salvar arquivos em apps
-**snap**, como Brave, Firefox e Discord, muitas vezes logo depois de abrir
-a janela de escolher pasta ou de responder a um pedido de permissão
-("Permitir que … acesse …?"). Pode aparecer antes um
-`WARNING: kernel/workqueue.c:2351`, sempre com uma função diferente.
+**Symptom:** the laptop freezes completely (screen, keyboard, SSH, SysRq)
+and the log just stops. It happens when downloading or saving files in
+**snap** apps such as Brave, Firefox and Discord, often right after the
+folder chooser opens or after you answer a permission prompt ("Allow …
+to access …?"). A `WARNING: kernel/workqueue.c:2351` may show up first,
+each time with a different function.
 
-**Causa:** um bug do kernel 6.17+ / 7.0 no **pedido de permissão do
-AppArmor** dos snaps (*permission prompting*), que vem ligado no Ubuntu
-26.04. Não é hardware, driver NVIDIA, Wi-Fi, SSD, RAM nem este projeto.
-Neste notebook, a troca de kernel, de driver NVIDIA e de ajustes do Wi-Fi e
-do SSD não resolveu. Um teste de 15 min gravando ~8 GB no SSD não travou.
-O travamento veio ~1 s depois de responder a um pedido de permissão.
-Relatos: [Launchpad #2143937](https://bugs.launchpad.net/apparmor/+bug/2143937),
+**Cause:** a bug in kernel 6.17+ / 7.0 in snap **AppArmor permission
+prompting**, which is on by default in Ubuntu 26.04. It is not the hardware,
+the NVIDIA driver, Wi-Fi, the SSD, the RAM or this project. On this laptop,
+changing the kernel, the NVIDIA driver and the Wi-Fi and SSD settings did
+not fix it. A 15-minute test writing ~8 GB to the SSD did not freeze. The
+freeze came ~1 s after answering a permission prompt.
+Reports: [Launchpad #2143937](https://bugs.launchpad.net/apparmor/+bug/2143937),
 [#2158994](https://bugs.launchpad.net/ubuntu/+source/linux/+bug/2158994),
-[Discourse do Ubuntu](https://discourse.ubuntu.com/t/screen-freezes-or-kernel-panics-after-enabling-permission-prompting-on-26-04/82666).
+[Ubuntu Discourse](https://discourse.ubuntu.com/t/screen-freezes-or-kernel-panics-after-enabling-permission-prompting-on-26-04/82666).
 
-**Solução:** salve o que estiver aberto e desligue o pedido de permissão em
-**Central de Segurança → Permissões de aplicativos**, ou pelo terminal:
+**Fix:** save your open work and turn off permission prompting in
+**Security Center → App Permissions**, or in the terminal:
 
 ```bash
 sudo snap set system experimental.apparmor-prompting=false
 ```
 
-Depois **reinicie**. Desligar o recurso reinicia o snapd, o que pode travar
-uma última vez. Os snaps continuam isolados pelo AppArmor; você só deixa de
-receber os pedidos de acesso. Para conferir, o log deve mostrar
-`the prompting feature is not enabled` no `prompting-client`. Religue quando
-sair um kernel com a correção.
+Then **reboot**. Turning the feature off restarts snapd, which may freeze
+one last time. Snaps stay confined by AppArmor; you just stop getting the
+access prompts. To check, the log should show
+`the prompting feature is not enabled` from `prompting-client`. Turn it back
+on once a kernel with the fix is out.
 </details>
 
 <details>
-<summary><b>A tela azul do MOK passou direto / a chave não foi cadastrada</b></summary>
+<summary><b>The blue MOK screen went by / the key was not enrolled</b></summary>
 
-Ela espera só 10 segundos. Rode `sudo ./install.sh mok` de novo, reinicie e
-aperte uma tecla assim que ela aparecer. Escolha **Enroll MOK**, não
-*Continue boot*. Para conferir: `sudo ./install.sh check`.
+It only waits 10 seconds. Run `sudo ./install.sh mok` again, reboot and press
+a key as soon as it shows up. Pick **Enroll MOK**, not *Continue boot*. To
+check: `sudo ./install.sh check`.
 </details>
 
 <details>
-<summary><b>A extensão não aparece ou mostra "Serviço victus-thermal parado"</b></summary>
+<summary><b>The extension does not show up, or shows "Serviço parado" ("Service stopped")</b></summary>
 
-- Depois de instalar ou atualizar, **saia e entre de novo na sessão**.
-- Veja o serviço: `systemctl status victus-thermal` e
+- After installing or updating, **log out and back in**.
+- Check the service: `systemctl status victus-thermal` and
   `journalctl -u victus-thermal -n 30`.
 </details>
 
 <details>
-<summary><b>"Sem permissão para mudar as ventoinhas"</b></summary>
+<summary><b>"Sem permissão para mudar as ventoinhas" ("No permission to change the fans")</b></summary>
 
-Rode `sudo ./install.sh daemon` de novo a partir do seu usuário. Ele dá a
-permissão na hora, sem precisar sair da sessão.
+Run `sudo ./install.sh daemon` again from your own user. It grants the
+permission right away, with no need to log out.
 </details>
 
 <details>
-<summary><b>O botão "Luz do teclado" não aparece</b></summary>
+<summary><b>The "Luz do teclado" (keyboard light) button does not show up</b></summary>
 
-Ele só aparece quando o driver expõe a luz. Confira com
-`ls /sys/class/leds/` (deve existir `hp::kbd_backlight`) e
-`journalctl -k | grep "keyboard backlight"`. Depois de instalar o driver,
-saia e entre de novo na sessão.
+It only shows up when the driver exposes the light. Check with
+`ls /sys/class/leds/` (there should be a `hp::kbd_backlight`) and
+`journalctl -k | grep "keyboard backlight"`. After installing the driver,
+log out and back in.
 </details>
 
 <details>
-<summary><b>O driver não carregou depois de atualizar o kernel</b></summary>
+<summary><b>The driver did not load after a kernel update</b></summary>
 
-O driver só é compilado para o kernel 7.0.x. Em outra série, o driver original
-do Ubuntu continua funcionando, e as ventoinhas ficam com o firmware HP. Veja
-`dkms status` e `sudo ./install.sh check`.
+The driver is only built for kernel 7.0.x. On another series, Ubuntu's
+original driver keeps working, and the fans stay with the HP firmware. See
+`dkms status` and `sudo ./install.sh check`.
 </details>
 
 <details>
-<summary><b>Quero voltar ao comportamento de fábrica rapidamente</b></summary>
+<summary><b>I want the factory behaviour back quickly</b></summary>
 
-`victusctl mode auto` (só o firmware HP), ou
+`victusctl mode auto` (HP firmware only), or
 `sudo systemctl stop victus-thermal`.
 </details>
 
-## Atualizar e desinstalar
+## Updating and uninstalling
 
 ```bash
 cd ~/Projects/victus-thermal
-git pull && sudo ./install.sh all     # atualizar; depois saia e entre na sessão
+git pull && sudo ./install.sh all     # update; then log out and back in
 
-sudo ./uninstall.sh                   # remove serviço, driver e extensão; mantém a config
-sudo ./uninstall.sh --purge           # remove tudo, inclusive config e preferências
+sudo ./uninstall.sh                   # removes the service, driver and extension; keeps the config
+sudo ./uninstall.sh --purge           # removes everything, including config and preferences
 ```
 
-## Desenvolvimento
+## Development
 
 ```bash
-python3 -I -m unittest discover -s tests -t .   # 100 testes, incluindo sysfs falso
-make -C driver                                  # compila o módulo sem instalar
+python3 -I -m unittest discover -s tests -t .   # 110 tests, including a fake sysfs
+make -C driver                                  # builds the module without installing it
 ```
 
 ```
 victus-thermal/
-├── driver/            hp-wmi.c do Ubuntu + entrada da 8C2F, DKMS e patch para o kernel oficial
-├── victus_thermal/    serviço (Python, só biblioteca padrão)
-│   ├── policy.py      decisão: emergência, modos, curva, tomada, tempos
-│   ├── hw.py          sysfs, sensores, RPM em cache, NVIDIA sem acordar
-│   ├── daemon.py      loop, watchdog, status, pedidos do usuário
-│   ├── config.py      leitura e validação do config.toml
-│   ├── curve.py       curva, histerese, suavização
+├── driver/            Ubuntu's hp-wmi.c + the 8C2F entry, DKMS and the patch for the mainline kernel
+├── victus_thermal/    service (Python, standard library only)
+│   ├── policy.py      decisions: emergency, modes, curve, AC power, timings
+│   ├── hw.py          sysfs, sensors, cached RPM, NVIDIA without waking it
+│   ├── daemon.py      loop, watchdog, status, user requests
+│   ├── config.py      reading and validating config.toml
+│   ├── curve.py       curve, hysteresis, smoothing
 │   └── cli.py         victusctl
-├── gnome-extension/   indicador da barra (thermalIndicator.js) e luz do teclado (keyboardLight.js)
-├── packaging/         unidade systemd, tmpfiles, config padrão
-├── extras/            NVIDIA sob demanda, Wi-Fi rtw89
-├── tools/             diagnóstico de congelamentos
-├── tests/             testes unitários e de integração
-└── docs/              como funciona, envio ao kernel oficial
+├── gnome-extension/   top bar indicator (thermalIndicator.js) and keyboard light (keyboardLight.js)
+├── packaging/         systemd unit, tmpfiles, default config
+├── extras/            NVIDIA on demand, rtw89 Wi-Fi
+├── tools/             freeze diagnostics
+├── tests/             unit and integration tests
+└── docs/              how it works, sending the patch upstream
 ```
 
-O patch da 8C2F para o kernel oficial está em `driver/patches/`. O passo a
-passo para enviar está em [docs/UPSTREAM.md](docs/UPSTREAM.md).
+The 8C2F patch for the mainline kernel is in `driver/patches/`. The steps to
+send it are in [docs/UPSTREAM.md](docs/UPSTREAM.md).
 
-## Licença e créditos
+## License and credits
 
-- Serviço, extensão e ferramentas: **GPL-3.0-or-later**.
-- `driver/hp-wmi.c`: licença original do kernel, **GPL-2.0-or-later**.
-- A família `victus_s` da 8C2F foi confirmada de forma independente pelo
+- Service, extension and tools: **GPL-3.0-or-later**.
+- `driver/hp-wmi.c`: the kernel's original license, **GPL-2.0-or-later**.
+- The `victus_s` family for 8C2F was independently confirmed by
   [omen-fan-control](https://github.com/arfelious/omen-fan-control) v2.1.0.
-- Inspirado no [victus-control](https://github.com/Batuhan4/victus-control).
+- Inspired by [victus-control](https://github.com/Batuhan4/victus-control).
